@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>Dhun</string>
 	<key>CFBundleIdentifier</key>
-	<string>world.mysola.dhun</string>
+	<string>io.github.ayush-pbh.dhun</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -29,7 +29,7 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Mysola</string>
+	<string>© 2026 Ayush Tripathi</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Dhun reads the currently playing track and album artwork from the Spotify app.</string>
 </dict>

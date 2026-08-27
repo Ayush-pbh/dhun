@@ -113,7 +113,7 @@ swift scripts/make-banner.swift
 
 ## License
 
-[MIT](LICENSE) — © 2026 Mysola.
+[MIT](LICENSE) — © 2026 Ayush Tripathi.
 
 <div align="center">
 <sub>Dhun is an independent project and is not affiliated with or endorsed by Spotify.</sub>
