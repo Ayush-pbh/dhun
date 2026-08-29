@@ -122,6 +122,18 @@ struct SettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Ambient Visualizer") {
+                Toggle("Audio-reactive visualizer", isOn: $settings.visualizerEnabled)
+                Picker("Style", selection: $settings.visualizerStyle) {
+                    ForEach(VisualizerStyle.allCases, id: \.self) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
+                Text("Draws from Spotify's actual audio, tinted with the album palette. macOS asks once for the screen & system audio recording permission — Dhun listens only to Spotify's output, never the microphone.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
@@ -154,8 +166,6 @@ struct SettingsView: View {
     private var labsTab: some View {
         Form {
             Section("Planned — not built yet") {
-                Label("Audio-reactive visualizer (needs system-audio capture)", systemImage: "waveform")
-                    .foregroundStyle(.secondary)
                 Label("Album wall — listening-history collage wallpaper", systemImage: "square.grid.3x3")
                     .foregroundStyle(.secondary)
                 Label("Cassette & CD personas", systemImage: "recordingtape")

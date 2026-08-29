@@ -91,6 +91,12 @@ final class AppSettings: ObservableObject {
     @Published var toastEnabled: Bool {
         didSet { Self.defaults.set(toastEnabled, forKey: "toastEnabled") }
     }
+    @Published var visualizerEnabled: Bool {
+        didSet { Self.defaults.set(visualizerEnabled, forKey: "visualizerEnabled") }
+    }
+    @Published var visualizerStyle: VisualizerStyle {
+        didSet { Self.defaults.set(visualizerStyle.rawValue, forKey: "visualizerStyle") }
+    }
 
     // MARK: General
 
@@ -126,6 +132,8 @@ final class AppSettings: ObservableObject {
         desktopVinylEnabled = d.object(forKey: "desktopVinylEnabled") as? Bool ?? false
         notchIslandEnabled = d.object(forKey: "notchIslandEnabled") as? Bool ?? false
         toastEnabled = d.object(forKey: "toastEnabled") as? Bool ?? false
+        visualizerEnabled = d.object(forKey: "visualizerEnabled") as? Bool ?? false
+        visualizerStyle = VisualizerStyle(rawValue: d.string(forKey: "visualizerStyle") ?? "") ?? .bars
         hideDockIcon = d.object(forKey: "hideDockIcon") as? Bool ?? false
         statusItemEnabled = d.object(forKey: "statusItemEnabled") as? Bool ?? true
         hideWhileSharing = d.object(forKey: "hideWhileSharing") as? Bool ?? false

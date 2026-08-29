@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(settings.hideDockIcon ? .accessory : .regular)
         buildMenu()
 
-        ambientController = AmbientController(model: model)
+        ambientController = AmbientController(model: model, settings: settings)
 
         artController = ArtWindowController(settings: settings)
         artController.onOpenSettings = { [weak self] in self?.openSettings() }
@@ -200,6 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 isPlaying: currentTrack?.isPlaying ?? false
             )
         }
+        ambientController.refreshVisualizer()
         applyLaunchAtLogin()
         autoApplyWallpaperIfNeeded()
     }

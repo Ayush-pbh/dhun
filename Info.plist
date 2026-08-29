@@ -32,5 +32,7 @@
 	<string>© 2026 Ayush Tripathi</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Dhun reads the currently playing track and album artwork from the Spotify app.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Dhun listens to Spotify's audio output to draw the ambient visualizer. It never records the microphone.</string>
 </dict>
 </plist>

@@ -2,15 +2,19 @@ import AppKit
 import SwiftUI
 
 /// Full-screen "now playing" scene: the artwork drifting slowly as a blurred
-/// backdrop with the sharp cover and big typography centered. Click anywhere
-/// or press Esc to leave.
+/// backdrop with the sharp cover and big typography centered, plus an
+/// optional audio-reactive visualizer. Click anywhere or press Esc to leave.
 final class AmbientController {
     private let model: NowPlayingModel
+    private let settings: AppSettings
+    private let visualizer = AudioVisualizerEngine()
     private var window: NSWindow?
     private var keyMonitor: Any?
 
-    init(model: NowPlayingModel) {
+    init(model: NowPlayingModel, settings: AppSettings) {
         self.model = model
+        self.settings = settings
+        visualizer.onCaptureProblem = { Self.showCapturePermissionAlert() }
     }
 
     var isActive: Bool { window != nil }
@@ -37,12 +41,19 @@ final class AmbientController {
         w.level = .modalPanel
         w.collectionBehavior = [.fullScreenAuxiliary]
         w.isReleasedWhenClosed = false
-        w.contentView = NSHostingView(rootView: AmbientView(model: model, onExit: { [weak self] in
-            self?.exit()
-        }))
+        w.contentView = NSHostingView(rootView: AmbientView(
+            model: model,
+            settings: settings,
+            visualizer: visualizer,
+            onExit: { [weak self] in self?.exit() }
+        ))
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         window = w
+
+        if settings.visualizerEnabled {
+            visualizer.start()
+        }
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 { // Esc
@@ -58,8 +69,32 @@ final class AmbientController {
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
         }
+        visualizer.stop()
         window?.orderOut(nil)
         window = nil
+    }
+
+    /// Applies a visualizer toggle change while ambient mode is open.
+    func refreshVisualizer() {
+        guard isActive else { return }
+        if settings.visualizerEnabled {
+            visualizer.start()
+        } else {
+            visualizer.stop()
+        }
+    }
+
+    private static func showCapturePermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "The visualizer needs audio access"
+        alert.informativeText = """
+        Dhun draws the ambient visualizer from Spotify's actual audio, which macOS \
+        exposes through the screen & system audio recording permission.
+
+        Open System Settings → Privacy & Security → Screen & System Audio Recording, \
+        enable Dhun, then relaunch Dhun.
+        """
+        alert.runModal()
     }
 }
 
@@ -69,6 +104,8 @@ private final class KeyableBorderlessWindow: NSWindow {
 
 struct AmbientView: View {
     @ObservedObject var model: NowPlayingModel
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var visualizer: AudioVisualizerEngine
     var onExit: () -> Void
     @State private var drift = false
 
@@ -89,6 +126,11 @@ struct AmbientView: View {
                             drift = true
                         }
                     }
+            }
+
+            if settings.visualizerEnabled {
+                visualization
+                    .allowsHitTesting(false)
             }
 
             VStack(spacing: 30) {
@@ -130,5 +172,61 @@ struct AmbientView: View {
         .contentShape(Rectangle())
         .onTapGesture { onExit() }
         .preferredColorScheme(.dark)
+    }
+
+    private var visualization: some View {
+        Canvas { context, size in
+            let primary = Color(nsColor: model.palette.primary)
+            let secondary = Color(nsColor: model.palette.secondary)
+            switch settings.visualizerStyle {
+            case .bars:
+                drawBars(context: &context, size: size, primary: primary, secondary: secondary)
+            case .wave:
+                drawWave(context: &context, size: size, primary: primary)
+            }
+        }
+    }
+
+    private func drawBars(context: inout GraphicsContext, size: CGSize, primary: Color, secondary: Color) {
+        let bands = visualizer.bands
+        guard !bands.isEmpty else { return }
+        let spacing: CGFloat = 5
+        let barWidth = (size.width - spacing * CGFloat(bands.count + 1)) / CGFloat(bands.count)
+        guard barWidth > 0 else { return }
+        let maxHeight = size.height * 0.30
+
+        context.addFilter(.shadow(color: primary.opacity(0.7), radius: 14))
+        let gradient = Gradient(colors: [secondary.opacity(0.9), primary, .white.opacity(0.95)])
+        for (index, level) in bands.enumerated() {
+            let height = max(4, CGFloat(level) * maxHeight)
+            let x = spacing + CGFloat(index) * (barWidth + spacing)
+            let rect = CGRect(x: x, y: size.height - height, width: barWidth, height: height)
+            let path = Path(roundedRect: rect, cornerRadius: barWidth * 0.3)
+            context.fill(path, with: .linearGradient(
+                gradient,
+                startPoint: CGPoint(x: rect.midX, y: size.height),
+                endPoint: CGPoint(x: rect.midX, y: size.height - maxHeight)
+            ))
+        }
+    }
+
+    private func drawWave(context: inout GraphicsContext, size: CGSize, primary: Color) {
+        let samples = visualizer.waveform
+        guard samples.count > 1 else { return }
+        let baseline = size.height * 0.80
+        let amplitude = size.height * 0.13
+
+        var path = Path()
+        for (index, value) in samples.enumerated() {
+            let x = size.width * CGFloat(index) / CGFloat(samples.count - 1)
+            let y = baseline - CGFloat(value) * amplitude
+            if index == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        context.addFilter(.shadow(color: primary.opacity(0.8), radius: 10))
+        context.stroke(path, with: .color(primary), style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
     }
 }

@@ -49,6 +49,11 @@ artwork, live progress, and playback controls.
 ✨ **Moments** — a brief toast on track change, and a full-screen **Ambient mode**
 (drifting blurred backdrop, sharp cover, big type) for when the Mac is docked.
 
+📊 **Audio-reactive visualizer** — WMP-nostalgia spectrum bars or an oscilloscope
+waveform in Ambient mode, driven by Spotify's *actual audio* (ScreenCaptureKit +
+Accelerate FFT, filtered to Spotify's output only) and tinted with the album palette.
+Needs the screen & system audio recording permission — never touches the microphone.
+
 🕹️ **Controls where you want them** — hover the square for a **Liquid Glass** control
 pill (macOS 26), scroll on it for volume, or use the menu bar item.
 
@@ -105,7 +110,6 @@ swift scripts/make-banner.swift
 
 ## Roadmap
 
-- Audio-reactive visualizer (system-audio capture)
 - Album wall — listening-history collage wallpaper
 - Cassette & CD personas
 - Shortcuts / App Intents automation
