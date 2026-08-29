@@ -8,6 +8,7 @@ final class AmbientController {
     private let model: NowPlayingModel
     private let settings: AppSettings
     private let visualizer = AudioVisualizerEngine()
+    private let stats = VisualizerStats()
     private var window: NSWindow?
     private var keyMonitor: Any?
 
@@ -45,6 +46,7 @@ final class AmbientController {
             model: model,
             settings: settings,
             visualizer: visualizer,
+            stats: stats,
             onExit: { [weak self] in self?.exit() }
         ))
         w.makeKeyAndOrderFront(nil)
@@ -116,6 +118,7 @@ struct AmbientView: View {
     @ObservedObject var model: NowPlayingModel
     @ObservedObject var settings: AppSettings
     let visualizer: AudioVisualizerEngine
+    let stats: VisualizerStats
     var onExit: () -> Void
     @State private var drift = false
 
@@ -131,7 +134,8 @@ struct AmbientView: View {
                     engine: visualizer,
                     mode: settings.visualizerMode,
                     colorA: tints.body,
-                    colorB: tints.accent
+                    colorB: tints.accent,
+                    stats: stats
                 )
                 .allowsHitTesting(false)
             } else if let artwork = model.artwork {
@@ -184,10 +188,58 @@ struct AmbientView: View {
                 .padding(.horizontal, 60)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if settings.debugOverlay {
+                DebugOverlay(engine: visualizer, stats: stats)
+                    .padding(.top, 44)
+                    .padding(.trailing, 28)
+            }
+        }
         .ignoresSafeArea()
         .contentShape(Rectangle())
         .onTapGesture { onExit() }
         .preferredColorScheme(.dark)
     }
 
+}
+
+/// Debug readout: live raw waveform straight from the capture pipeline and
+/// the Metal view's measured frame rate. Isolated in its own view so its
+/// high-frequency updates don't re-render the rest of the ambient scene.
+private struct DebugOverlay: View {
+    @ObservedObject var engine: AudioVisualizerEngine
+    @ObservedObject var stats: VisualizerStats
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 5) {
+            Canvas { context, size in
+                let samples = engine.waveform
+                guard samples.count > 1 else { return }
+                let midY = size.height / 2
+                var path = Path()
+                for (index, value) in samples.enumerated() {
+                    let x = size.width * CGFloat(index) / CGFloat(samples.count - 1)
+                    let y = midY - CGFloat(value) * midY * 0.9
+                    if index == 0 {
+                        path.move(to: CGPoint(x: x, y: y))
+                    } else {
+                        path.addLine(to: CGPoint(x: x, y: y))
+                    }
+                }
+                context.stroke(path, with: .color(.green), lineWidth: 1)
+            }
+            .frame(width: 190, height: 46)
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.15)))
+
+            Text(String(
+                format: "%.0f fps · lvl %.2f · bass %.2f",
+                stats.fps,
+                engine.signals.level,
+                engine.signals.bass
+            ))
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(.green.opacity(0.9))
+        }
+    }
 }

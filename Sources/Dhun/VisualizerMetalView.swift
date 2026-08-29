@@ -120,10 +120,19 @@ enum VisualizerColorScheme: String, CaseIterable, Hashable {
 ///   past — ink advection, warp streaks), then a present pass
 /// - particles: a compute pass moves the flock, a fade pass keeps trails,
 ///   additive points render on top, then a present pass
+/// Live render statistics for the debug overlay.
+final class VisualizerStats: ObservableObject {
+    @Published var fps: Double = 0
+}
+
 final class VisualizerMetalView: MTKView, MTKViewDelegate {
     weak var engine: AudioVisualizerEngine?
+    weak var stats: VisualizerStats?
     var colorA = SIMD4<Float>(0.04, 0.22, 0.70, 1)
     var colorB = SIMD4<Float>(0.16, 0.70, 1.00, 1)
+
+    private var frameCount = 0
+    private var lastFPSStamp = CACurrentMediaTime()
 
     var mode: VisualizerMode = .plasma {
         didSet {
@@ -449,6 +458,14 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
 
         commandBuffer.present(drawable)
         commandBuffer.commit()
+
+        frameCount += 1
+        let now = CACurrentMediaTime()
+        if now - lastFPSStamp >= 1.0 {
+            stats?.fps = Double(frameCount) / (now - lastFPSStamp)
+            frameCount = 0
+            lastFPSStamp = now
+        }
     }
 }
 
@@ -457,10 +474,12 @@ struct MetalVisualization: NSViewRepresentable {
     let mode: VisualizerMode
     let colorA: SIMD4<Float>
     let colorB: SIMD4<Float>
+    var stats: VisualizerStats? = nil
 
     func makeNSView(context: Context) -> VisualizerMetalView {
         let view = VisualizerMetalView(frame: .zero, device: MTLCreateSystemDefaultDevice())
         view.engine = engine
+        view.stats = stats
         view.mode = mode
         view.colorA = colorA
         view.colorB = colorB
@@ -468,6 +487,7 @@ struct MetalVisualization: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: VisualizerMetalView, context: Context) {
+        nsView.stats = stats
         nsView.mode = mode
         nsView.colorA = colorA
         nsView.colorB = colorB

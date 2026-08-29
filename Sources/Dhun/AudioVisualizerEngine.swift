@@ -25,8 +25,11 @@ struct AudioSignals: Equatable {
 /// don't pollute the picture.
 final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate, SCStreamOutput {
     static let bandCount = 48
+    static let waveformCount = 120
 
     @Published private(set) var signals = AudioSignals()
+    /// Raw downsampled waveform of the latest FFT window — debug overlay only.
+    @Published private(set) var waveform = [Float](repeating: 0, count: AudioVisualizerEngine.waveformCount)
 
     /// Fired once when capture can't start — almost always the Screen &
     /// System Audio Recording permission.
@@ -80,6 +83,7 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
         }
         DispatchQueue.main.async {
             self.signals = AudioSignals()
+            self.waveform = [Float](repeating: 0, count: Self.waveformCount)
         }
     }
 
@@ -257,9 +261,16 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
         smoothedSignals.high = smooth(smoothedSignals.high, bandAverage(34..<Self.bandCount), attack: 0.70, decay: 0.72)
         smoothedSignals.level = smooth(smoothedSignals.level, bandAverage(0..<Self.bandCount), attack: 0.35, decay: 0.95)
 
+        let step = max(1, samples.count / Self.waveformCount)
+        var wave = [Float](repeating: 0, count: Self.waveformCount)
+        for i in 0..<Self.waveformCount {
+            wave[i] = samples[min(i * step, samples.count - 1)]
+        }
+
         let signalsCopy = smoothedSignals
         DispatchQueue.main.async {
             self.signals = signalsCopy
+            self.waveform = wave
         }
     }
 

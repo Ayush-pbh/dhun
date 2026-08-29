@@ -135,6 +135,7 @@ struct SettingsView: View {
                             Text(scheme.label).tag(scheme)
                         }
                     }
+                    Toggle("Debug overlay (waveform + FPS)", isOn: $settings.debugOverlay)
                 }
                 Text("Full-screen generative scenes that breathe with the music — plasma, volumetric nebula, liquid-metal ferrofluid, aurora curtains, ink blooms with memory, a hyperspace warp, or a flocking murmuration. Driven by Spotify's actual audio — macOS asks once for the screen & system audio recording permission; Dhun never touches the microphone.")
                     .font(.footnote)
