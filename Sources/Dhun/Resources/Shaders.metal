@@ -509,11 +509,11 @@ static float explosionMap(float3 p, float t, float dissolve, float radius) {
 }
 
 static float3 explosionColor(float density, float radius, float3 tintA, float3 tintB) {
-    float3 hot = mix(tintB, float3(1.0, 0.95, 0.85), 0.55);
-    float3 cool = tintA * 0.75;
+    float3 hot = mix(tintB, float3(1.0, 0.95, 0.85), 0.30);
+    float3 cool = tintA * 0.9;
     float3 result = mix(hot, cool, density);
-    float3 colCenter = 7.0 * mix(float3(0.9), tintB, 0.3);
-    float3 colEdge = 1.5 * mix(tintA, float3(0.5), 0.4);
+    float3 colCenter = 8.0 * mix(float3(1.0), tintB, 0.45);
+    float3 colEdge = 1.8 * mix(tintA, float3(0.5), 0.15);
     result *= mix(colCenter, colEdge, min((radius + 0.05) / 0.9, 1.15));
     return result;
 }
@@ -543,7 +543,7 @@ fragment float4 explosionFragment(FSQVertexOut in [[stage_in]],
     float energy = strength * exp(-age * 0.45);
     float dissolve = max(2.0 * (1.0 - exp(-age * 0.5)) - 0.3 * u.mid, 0.0);
     float radius = 3.1 + 2.6 * grow * (0.5 + 0.5 * strength);
-    float brightness = 0.20 + 0.45 * u.level + 1.7 * energy;
+    float brightness = 0.22 + 0.50 * u.level + 2.1 * energy;
 
     float3 rd = normalize(float3((fragCoord - 0.5 * u.resolution) / u.resolution.y, 1.0));
     rd.y = -rd.y;
@@ -558,7 +558,7 @@ fragment float4 explosionFragment(FSQVertexOut in [[stage_in]],
     float worldR = radius * 0.5;
     float boundSq = (worldR * 1.3) * (worldR * 1.3);
 
-    float3 lightColor = mix(u.colorB.rgb, float3(1.0), 0.25) * (0.85 + 0.5 * u.high);
+    float3 lightColor = mix(u.colorB.rgb, float3(1.0), 0.10) * (1.1 + 0.6 * u.high);
 
     if (raySphere(ro, rd, boundSq, minDist, maxDist)) {
         tt = minDist * step(tt, minDist);
@@ -602,7 +602,12 @@ fragment float4 explosionFragment(FSQVertexOut in [[stage_in]],
     }
 
     float3 color = sum.xyz * brightness;
-    color = 1.0 - exp(-color * 2.0);
+
+    // Vibrance: push chroma away from gray so the tints pop.
+    float luma = dot(color, float3(0.299, 0.587, 0.114));
+    color = max(mix(float3(luma), color, 1.45), 0.0);
+
+    color = 1.0 - exp(-color * 2.3);
     return float4(color, 1.0);
 }
 
