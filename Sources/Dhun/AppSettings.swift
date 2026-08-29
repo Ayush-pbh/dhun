@@ -94,6 +94,9 @@ final class AppSettings: ObservableObject {
     @Published var visualizerEnabled: Bool {
         didSet { Self.defaults.set(visualizerEnabled, forKey: "visualizerEnabled") }
     }
+    @Published var plasmaColorScheme: PlasmaColorScheme {
+        didSet { Self.defaults.set(plasmaColorScheme.rawValue, forKey: "plasmaColorScheme") }
+    }
 
     // MARK: General
 
@@ -130,6 +133,7 @@ final class AppSettings: ObservableObject {
         notchIslandEnabled = d.object(forKey: "notchIslandEnabled") as? Bool ?? false
         toastEnabled = d.object(forKey: "toastEnabled") as? Bool ?? false
         visualizerEnabled = d.object(forKey: "visualizerEnabled") as? Bool ?? false
+        plasmaColorScheme = PlasmaColorScheme(rawValue: d.string(forKey: "plasmaColorScheme") ?? "") ?? .electricBlue
         hideDockIcon = d.object(forKey: "hideDockIcon") as? Bool ?? false
         statusItemEnabled = d.object(forKey: "statusItemEnabled") as? Bool ?? true
         hideWhileSharing = d.object(forKey: "hideWhileSharing") as? Bool ?? false

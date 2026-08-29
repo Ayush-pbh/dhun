@@ -116,7 +116,8 @@ struct AmbientView: View {
             if settings.visualizerEnabled {
                 // The plasma field replaces the blurred-cover backdrop; the
                 // Metal view drives its own 60 fps loop, no SwiftUI churn.
-                PlasmaVisualization(engine: visualizer)
+                let tints = settings.plasmaColorScheme.resolve(palette: model.palette)
+                PlasmaVisualization(engine: visualizer, colorA: tints.body, colorB: tints.accent)
                     .allowsHitTesting(false)
             } else if let artwork = model.artwork {
                 Image(nsImage: artwork)
