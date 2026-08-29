@@ -87,9 +87,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         // If a visualizer is selected but the screen/system-audio permission
-        // is missing, say so up front — macOS itself only asks once, ever.
+        // is missing, actively request it — this shows the real system prompt
+        // when the state is undetermined. If it's already hard-denied, fall
+        // back to our alert pointing at System Settings.
         if settings.visualizerMode != .none, !CGPreflightScreenCaptureAccess() {
-            AmbientController.showCapturePermissionAlert()
+            if !CGRequestScreenCaptureAccess() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    guard !CGPreflightScreenCaptureAccess() else { return }
+                    AmbientController.showCapturePermissionAlert()
+                }
+            }
         }
     }
 
