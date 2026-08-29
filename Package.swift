@@ -9,7 +9,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Dhun",
-            path: "Sources/Dhun"
+            path: "Sources/Dhun",
+            resources: [
+                .copy("Resources/Shaders.metal")
+            ]
         )
     ]
 )

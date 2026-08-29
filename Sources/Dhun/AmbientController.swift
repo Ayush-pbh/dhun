@@ -51,7 +51,7 @@ final class AmbientController {
         NSApp.activate(ignoringOtherApps: true)
         window = w
 
-        if settings.visualizerEnabled {
+        if settings.visualizerMode != .none {
             visualizer.start()
         }
 
@@ -74,10 +74,10 @@ final class AmbientController {
         window = nil
     }
 
-    /// Applies a visualizer toggle change while ambient mode is open.
+    /// Applies a visualizer mode change while ambient mode is open.
     func refreshVisualizer() {
         guard isActive else { return }
-        if settings.visualizerEnabled {
+        if settings.visualizerMode != .none {
             visualizer.start()
         } else {
             visualizer.stop()
@@ -113,12 +113,17 @@ struct AmbientView: View {
         ZStack {
             Color.black
 
-            if settings.visualizerEnabled {
-                // The plasma field replaces the blurred-cover backdrop; the
+            if settings.visualizerMode != .none {
+                // The visualizer replaces the blurred-cover backdrop; the
                 // Metal view drives its own 60 fps loop, no SwiftUI churn.
-                let tints = settings.plasmaColorScheme.resolve(palette: model.palette)
-                PlasmaVisualization(engine: visualizer, colorA: tints.body, colorB: tints.accent)
-                    .allowsHitTesting(false)
+                let tints = settings.visualizerColorScheme.resolve(palette: model.palette)
+                MetalVisualization(
+                    engine: visualizer,
+                    mode: settings.visualizerMode,
+                    colorA: tints.body,
+                    colorB: tints.accent
+                )
+                .allowsHitTesting(false)
             } else if let artwork = model.artwork {
                 Image(nsImage: artwork)
                     .resizable()

@@ -124,13 +124,19 @@ struct SettingsView: View {
             }
 
             Section("Ambient Visualizer") {
-                Toggle("Ambience — living plasma field", isOn: $settings.visualizerEnabled)
-                Picker("Colors", selection: $settings.plasmaColorScheme) {
-                    ForEach(PlasmaColorScheme.allCases, id: \.self) { scheme in
-                        Text(scheme.label).tag(scheme)
+                Picker("Visualization", selection: $settings.visualizerMode) {
+                    ForEach(VisualizerMode.allCases, id: \.self) { mode in
+                        Text(mode.label).tag(mode)
                     }
                 }
-                Text("A full-screen procedural energy field in the spirit of the classic Windows Media Player Ambience visual: glowing clouds, tendrils, and shimmer that breathe with the music. Driven by Spotify's actual audio — macOS asks once for the screen & system audio recording permission; Dhun never touches the microphone.")
+                if settings.visualizerMode != .none {
+                    Picker("Colors", selection: $settings.visualizerColorScheme) {
+                        ForEach(VisualizerColorScheme.allCases, id: \.self) { scheme in
+                            Text(scheme.label).tag(scheme)
+                        }
+                    }
+                }
+                Text("Full-screen generative scenes that breathe with the music — plasma, volumetric nebula, liquid-metal ferrofluid, aurora curtains, ink blooms with memory, a hyperspace warp, or a flocking murmuration. Driven by Spotify's actual audio — macOS asks once for the screen & system audio recording permission; Dhun never touches the microphone.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

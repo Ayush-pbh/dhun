@@ -12,6 +12,9 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp ".build/release/Dhun" "$APP_DIR/Contents/MacOS/Dhun"
 cp Info.plist "$APP_DIR/Contents/Info.plist"
+if [[ -d ".build/release/Dhun_Dhun.bundle" ]]; then
+  cp -R ".build/release/Dhun_Dhun.bundle" "$APP_DIR/Contents/Resources/"
+fi
 if [[ -f Dhun.icns ]]; then
   cp Dhun.icns "$APP_DIR/Contents/Resources/Dhun.icns"
 fi

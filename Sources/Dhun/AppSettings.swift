@@ -91,11 +91,11 @@ final class AppSettings: ObservableObject {
     @Published var toastEnabled: Bool {
         didSet { Self.defaults.set(toastEnabled, forKey: "toastEnabled") }
     }
-    @Published var visualizerEnabled: Bool {
-        didSet { Self.defaults.set(visualizerEnabled, forKey: "visualizerEnabled") }
+    @Published var visualizerMode: VisualizerMode {
+        didSet { Self.defaults.set(visualizerMode.rawValue, forKey: "visualizerMode") }
     }
-    @Published var plasmaColorScheme: PlasmaColorScheme {
-        didSet { Self.defaults.set(plasmaColorScheme.rawValue, forKey: "plasmaColorScheme") }
+    @Published var visualizerColorScheme: VisualizerColorScheme {
+        didSet { Self.defaults.set(visualizerColorScheme.rawValue, forKey: "plasmaColorScheme") }
     }
 
     // MARK: General
@@ -132,8 +132,13 @@ final class AppSettings: ObservableObject {
         desktopVinylEnabled = d.object(forKey: "desktopVinylEnabled") as? Bool ?? false
         notchIslandEnabled = d.object(forKey: "notchIslandEnabled") as? Bool ?? false
         toastEnabled = d.object(forKey: "toastEnabled") as? Bool ?? false
-        visualizerEnabled = d.object(forKey: "visualizerEnabled") as? Bool ?? false
-        plasmaColorScheme = PlasmaColorScheme(rawValue: d.string(forKey: "plasmaColorScheme") ?? "") ?? .electricBlue
+        if let raw = d.string(forKey: "visualizerMode"), let mode = VisualizerMode(rawValue: raw) {
+            visualizerMode = mode
+        } else {
+            // Migrate from the old boolean toggle.
+            visualizerMode = (d.object(forKey: "visualizerEnabled") as? Bool ?? false) ? .plasma : .none
+        }
+        visualizerColorScheme = VisualizerColorScheme(rawValue: d.string(forKey: "plasmaColorScheme") ?? "") ?? .electricBlue
         hideDockIcon = d.object(forKey: "hideDockIcon") as? Bool ?? false
         statusItemEnabled = d.object(forKey: "statusItemEnabled") as? Bool ?? true
         hideWhileSharing = d.object(forKey: "hideWhileSharing") as? Bool ?? false
