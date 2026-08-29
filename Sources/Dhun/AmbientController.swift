@@ -105,7 +105,7 @@ private final class KeyableBorderlessWindow: NSWindow {
 struct AmbientView: View {
     @ObservedObject var model: NowPlayingModel
     @ObservedObject var settings: AppSettings
-    @ObservedObject var visualizer: AudioVisualizerEngine
+    let visualizer: AudioVisualizerEngine
     var onExit: () -> Void
     @State private var drift = false
 
@@ -113,7 +113,12 @@ struct AmbientView: View {
         ZStack {
             Color.black
 
-            if let artwork = model.artwork {
+            if settings.visualizerEnabled {
+                // The plasma field replaces the blurred-cover backdrop; the
+                // Metal view drives its own 60 fps loop, no SwiftUI churn.
+                PlasmaVisualization(engine: visualizer)
+                    .allowsHitTesting(false)
+            } else if let artwork = model.artwork {
                 Image(nsImage: artwork)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -126,11 +131,6 @@ struct AmbientView: View {
                             drift = true
                         }
                     }
-            }
-
-            if settings.visualizerEnabled {
-                visualization
-                    .allowsHitTesting(false)
             }
 
             VStack(spacing: 30) {
@@ -174,59 +174,4 @@ struct AmbientView: View {
         .preferredColorScheme(.dark)
     }
 
-    private var visualization: some View {
-        Canvas { context, size in
-            let primary = Color(nsColor: model.palette.primary)
-            let secondary = Color(nsColor: model.palette.secondary)
-            switch settings.visualizerStyle {
-            case .bars:
-                drawBars(context: &context, size: size, primary: primary, secondary: secondary)
-            case .wave:
-                drawWave(context: &context, size: size, primary: primary)
-            }
-        }
-    }
-
-    private func drawBars(context: inout GraphicsContext, size: CGSize, primary: Color, secondary: Color) {
-        let bands = visualizer.bands
-        guard !bands.isEmpty else { return }
-        let spacing: CGFloat = 5
-        let barWidth = (size.width - spacing * CGFloat(bands.count + 1)) / CGFloat(bands.count)
-        guard barWidth > 0 else { return }
-        let maxHeight = size.height * 0.30
-
-        context.addFilter(.shadow(color: primary.opacity(0.7), radius: 14))
-        let gradient = Gradient(colors: [secondary.opacity(0.9), primary, .white.opacity(0.95)])
-        for (index, level) in bands.enumerated() {
-            let height = max(4, CGFloat(level) * maxHeight)
-            let x = spacing + CGFloat(index) * (barWidth + spacing)
-            let rect = CGRect(x: x, y: size.height - height, width: barWidth, height: height)
-            let path = Path(roundedRect: rect, cornerRadius: barWidth * 0.3)
-            context.fill(path, with: .linearGradient(
-                gradient,
-                startPoint: CGPoint(x: rect.midX, y: size.height),
-                endPoint: CGPoint(x: rect.midX, y: size.height - maxHeight)
-            ))
-        }
-    }
-
-    private func drawWave(context: inout GraphicsContext, size: CGSize, primary: Color) {
-        let samples = visualizer.waveform
-        guard samples.count > 1 else { return }
-        let baseline = size.height * 0.80
-        let amplitude = size.height * 0.13
-
-        var path = Path()
-        for (index, value) in samples.enumerated() {
-            let x = size.width * CGFloat(index) / CGFloat(samples.count - 1)
-            let y = baseline - CGFloat(value) * amplitude
-            if index == 0 {
-                path.move(to: CGPoint(x: x, y: y))
-            } else {
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
-        }
-        context.addFilter(.shadow(color: primary.opacity(0.8), radius: 10))
-        context.stroke(path, with: .color(primary), style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
-    }
 }

@@ -49,9 +49,12 @@ artwork, live progress, and playback controls.
 ✨ **Moments** — a brief toast on track change, and a full-screen **Ambient mode**
 (drifting blurred backdrop, sharp cover, big type) for when the Mac is docked.
 
-📊 **Audio-reactive visualizer** — WMP-nostalgia spectrum bars or an oscilloscope
-waveform in Ambient mode, driven by Spotify's *actual audio* (ScreenCaptureKit +
-Accelerate FFT, filtered to Spotify's output only) and tinted with the album palette.
+🌌 **Ambience** — a full-screen living plasma field in Ambient mode, in the spirit of
+the classic Windows Media Player *Ambience* visual: domain-warped noise clouds, luminous
+tendrils, electrical filaments, and shimmer, rendered by a procedural Metal shader at
+60 fps. Spotify's *actual audio* (ScreenCaptureKit, filtered to Spotify only + Accelerate
+FFT) steers the simulation — bass breathes the large masses, mids stir turbulence and
+tendrils, highs add flicker — and it stays alive and beautiful in quiet passages.
 Needs the screen & system audio recording permission — never touches the microphone.
 
 🕹️ **Controls where you want them** — hover the square for a **Liquid Glass** control

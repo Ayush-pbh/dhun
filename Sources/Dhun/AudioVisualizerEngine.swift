@@ -3,28 +3,25 @@ import Combine
 import CoreMedia
 import ScreenCaptureKit
 
-enum VisualizerStyle: String, CaseIterable, Hashable {
-    case bars
-    case wave
-
-    var label: String {
-        switch self {
-        case .bars: return "Spectrum bars"
-        case .wave: return "Waveform"
-        }
-    }
+/// The condensed control signals the plasma shader consumes. Each is 0…1,
+/// smoothed with its own attack/decay so bass moves slow and heavy while
+/// highs flicker.
+struct AudioSignals: Equatable {
+    var bass: Float = 0
+    var mid: Float = 0
+    var high: Float = 0
+    var level: Float = 0
 }
 
 /// Captures Spotify's audio output with ScreenCaptureKit and runs it through
-/// an FFT to produce smoothed spectrum bands and a waveform for the ambient
-/// visualizer. Capture is filtered to the Spotify app when it's running, so
-/// other system sounds don't pollute the picture.
+/// an FFT. The spectrum is never displayed directly — it is condensed into
+/// AudioSignals that steer the procedural plasma simulation. Capture is
+/// filtered to the Spotify app when it's running, so other system sounds
+/// don't pollute the picture.
 final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate, SCStreamOutput {
     static let bandCount = 48
-    private static let waveformCount = 240
 
-    @Published private(set) var bands = [Float](repeating: 0, count: AudioVisualizerEngine.bandCount)
-    @Published private(set) var waveform = [Float](repeating: 0, count: AudioVisualizerEngine.waveformCount)
+    @Published private(set) var signals = AudioSignals()
 
     /// Fired once when capture can't start — almost always the Screen &
     /// System Audio Recording permission.
@@ -40,7 +37,7 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
     private lazy var fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
     private var hannWindow: [Float]
     private var ringBuffer = [Float]()
-    private var smoothedBands = [Float](repeating: 0, count: AudioVisualizerEngine.bandCount)
+    private var smoothedSignals = AudioSignals()
 
     override init() {
         hannWindow = [Float](repeating: 0, count: fftSize)
@@ -67,11 +64,10 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
         Task { try? await departing?.stopCapture() }
         sampleQueue.async {
             self.ringBuffer.removeAll()
-            self.smoothedBands = [Float](repeating: 0, count: Self.bandCount)
+            self.smoothedSignals = AudioSignals()
         }
         DispatchQueue.main.async {
-            self.bands = [Float](repeating: 0, count: Self.bandCount)
-            self.waveform = [Float](repeating: 0, count: Self.waveformCount)
+            self.signals = AudioSignals()
         }
     }
 
@@ -184,25 +180,25 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
             newBands[band] = min(max((decibels + 50) / 45, 0), 1)
         }
 
-        // Fast attack, slow decay — the classic falling-bars feel.
-        for i in 0..<Self.bandCount {
-            let target = newBands[i]
-            let current = smoothedBands[i]
-            smoothedBands[i] = target > current
-                ? current + (target - current) * 0.55
-                : current * 0.86
+        // Condense the spectrum into control signals. Bass gets slow, heavy
+        // smoothing; highs stay twitchy so fine detail can flicker.
+        func bandAverage(_ range: Range<Int>) -> Float {
+            var sum: Float = 0
+            for i in range { sum += newBands[i] }
+            return sum / Float(range.count)
         }
+        smoothedSignals.bass = smooth(smoothedSignals.bass, bandAverage(0..<9), attack: 0.40, decay: 0.93)
+        smoothedSignals.mid = smooth(smoothedSignals.mid, bandAverage(10..<32), attack: 0.50, decay: 0.86)
+        smoothedSignals.high = smooth(smoothedSignals.high, bandAverage(34..<Self.bandCount), attack: 0.70, decay: 0.72)
+        smoothedSignals.level = smooth(smoothedSignals.level, bandAverage(0..<Self.bandCount), attack: 0.35, decay: 0.95)
 
-        let step = max(1, fftSize / Self.waveformCount)
-        var wave = [Float](repeating: 0, count: Self.waveformCount)
-        for i in 0..<Self.waveformCount {
-            wave[i] = samples[min(i * step, fftSize - 1)]
-        }
-
-        let bandsCopy = smoothedBands
+        let signalsCopy = smoothedSignals
         DispatchQueue.main.async {
-            self.bands = bandsCopy
-            self.waveform = wave
+            self.signals = signalsCopy
         }
+    }
+
+    private func smooth(_ current: Float, _ target: Float, attack: Float, decay: Float) -> Float {
+        target > current ? current + (target - current) * attack : current * decay
     }
 }

@@ -124,13 +124,8 @@ struct SettingsView: View {
             }
 
             Section("Ambient Visualizer") {
-                Toggle("Audio-reactive visualizer", isOn: $settings.visualizerEnabled)
-                Picker("Style", selection: $settings.visualizerStyle) {
-                    ForEach(VisualizerStyle.allCases, id: \.self) { style in
-                        Text(style.label).tag(style)
-                    }
-                }
-                Text("Draws from Spotify's actual audio, tinted with the album palette. macOS asks once for the screen & system audio recording permission — Dhun listens only to Spotify's output, never the microphone.")
+                Toggle("Ambience — living plasma field", isOn: $settings.visualizerEnabled)
+                Text("A full-screen procedural energy field in the spirit of the classic Windows Media Player Ambience visual: glowing clouds, tendrils, and shimmer that breathe with the music. Driven by Spotify's actual audio — macOS asks once for the screen & system audio recording permission; Dhun never touches the microphone.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
