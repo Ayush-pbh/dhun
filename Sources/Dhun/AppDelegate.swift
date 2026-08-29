@@ -85,6 +85,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         applyLaunchAtLogin()
         NSApp.activate(ignoringOtherApps: true)
+
+        // If a visualizer is selected but the screen/system-audio permission
+        // is missing, say so up front — macOS itself only asks once, ever.
+        if settings.visualizerMode != .none, !CGPreflightScreenCaptureAccess() {
+            AmbientController.showCapturePermissionAlert()
+        }
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {

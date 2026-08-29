@@ -36,6 +36,9 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
     private var stream: SCStream?
     private var isRunning = false
     private var reportedProblem = false
+    private var buffersReceived = 0
+    private var analyzeCount = 0
+    private var forceDisplayWide = false
 
     private let fftSize = 1024
     private let log2n = vDSP_Length(10)
@@ -98,11 +101,12 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
             config.showsCursor = false
 
             let spotify = content.applications.filter { $0.bundleIdentifier == "com.spotify.client" }
+            let useAppFilter = !spotify.isEmpty && !forceDisplayWide
             let filter: SCContentFilter
-            if spotify.isEmpty {
-                filter = SCContentFilter(display: display, excludingWindows: [])
-            } else {
+            if useAppFilter {
                 filter = SCContentFilter(display: display, including: spotify, exceptingWindows: [])
+            } else {
+                filter = SCContentFilter(display: display, excludingWindows: [])
             }
 
             let newStream = SCStream(filter: filter, configuration: config, delegate: self)
@@ -110,12 +114,41 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
             try await newStream.startCapture()
             if isRunning {
                 stream = newStream
+                NSLog("Visualizer capture started (appFilter=\(useAppFilter))")
+                if useAppFilter {
+                    watchForSilentCapture()
+                }
             } else {
                 try? await newStream.stopCapture()
             }
         } catch {
             NSLog("Visualizer audio capture failed: \(error.localizedDescription)")
             reportProblem()
+        }
+    }
+
+    /// The app-filtered capture can start "successfully" yet deliver nothing
+    /// (e.g. when the audio actually comes from a helper process the filter
+    /// doesn't match). If no buffers arrive shortly after starting, retry
+    /// with display-wide capture, which hears everything.
+    private func watchForSilentCapture() {
+        sampleQueue.async { self.buffersReceived = 0 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            guard let self, self.isRunning else { return }
+            self.sampleQueue.async {
+                guard self.buffersReceived == 0 else { return }
+                NSLog("Visualizer: app-filtered capture is silent; falling back to display-wide capture")
+                DispatchQueue.main.async {
+                    guard self.isRunning else { return }
+                    self.forceDisplayWide = true
+                    let departing = self.stream
+                    self.stream = nil
+                    Task {
+                        try? await departing?.stopCapture()
+                        await self.startCapture()
+                    }
+                }
+            }
         }
     }
 
@@ -135,6 +168,7 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, sampleBuffer.isValid else { return }
+        buffersReceived += 1
         var incoming = [Float]()
         try? sampleBuffer.withAudioBufferList { bufferList, _ in
             guard let buffer = bufferList.first, let data = buffer.mData else { return }
@@ -209,6 +243,13 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
            now - smoothedSignals.onsetTime > 0.6 {
             smoothedSignals.onsetTime = now
             smoothedSignals.onsetStrength = min(bassNow * 1.25, 1.0)
+            NSLog("Visualizer: bass onset, strength=%.2f", smoothedSignals.onsetStrength)
+        }
+
+        analyzeCount += 1
+        if analyzeCount % 250 == 1 {
+            NSLog("Visualizer audio: level=%.2f bass=%.2f slowBass=%.2f",
+                  smoothedSignals.level, smoothedSignals.bass, slowBassAverage)
         }
 
         smoothedSignals.bass = smooth(smoothedSignals.bass, bandAverage(0..<9), attack: 0.40, decay: 0.93)

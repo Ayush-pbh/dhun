@@ -84,17 +84,27 @@ final class AmbientController {
         }
     }
 
-    private static func showCapturePermissionAlert() {
+    static func showCapturePermissionAlert() {
         let alert = NSAlert()
+        // The fullscreen ambient window sits at modal-panel level; make sure
+        // this alert lands above it, not behind it.
+        alert.window.level = .screenSaver
         alert.messageText = "The visualizer needs audio access"
         alert.informativeText = """
-        Dhun draws the ambient visualizer from Spotify's actual audio, which macOS \
-        exposes through the screen & system audio recording permission.
+        Dhun draws the visualizers from Spotify's actual audio, which macOS \
+        exposes through the screen & system audio recording permission — and \
+        that permission is currently off for Dhun. macOS only asks once, so \
+        it has to be enabled manually:
 
-        Open System Settings → Privacy & Security → Screen & System Audio Recording, \
-        enable Dhun, then relaunch Dhun.
+        System Settings → Privacy & Security → Screen & System Audio \
+        Recording → enable Dhun, then quit and reopen Dhun.
         """
-        alert.runModal()
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn,
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
     }
 }
 
