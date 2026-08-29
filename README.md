@@ -123,7 +123,17 @@ swift scripts/make-banner.swift
 
 ## License
 
-[MIT](LICENSE) — © 2026 Ayush Tripathi.
+[CC BY-NC-SA 4.0](LICENSE) — © 2026 Ayush Tripathi. Free to use, modify, and share
+for **non-commercial** purposes, with attribution, under the same license.
+
+Dhun deliberately uses this license so it can adapt visualizer shaders from the
+[Shadertoy](https://www.shadertoy.com) community, whose default license is
+CC BY-NC-SA 3.0. Every adapted shader is credited below and carries an attribution
+header in the source.
+
+### Shader credits
+
+- *(none yet — ports are credited here as they land)*
 
 <div align="center">
 <sub>Dhun is an independent project and is not affiliated with or endorsed by Spotify.</sub>
