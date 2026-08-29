@@ -60,6 +60,8 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
     func start() {
         guard !isRunning else { return }
         isRunning = true
+        // Re-surface permission problems on every session, not once per launch.
+        reportedProblem = false
         Task { await self.startCapture() }
     }
 
@@ -112,6 +114,7 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
                 try? await newStream.stopCapture()
             }
         } catch {
+            NSLog("Visualizer audio capture failed: \(error.localizedDescription)")
             reportProblem()
         }
     }
@@ -196,12 +199,14 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
         }
         // Bass onset: the instantaneous bass jumping well above its own
         // long-term average, with a cooldown so one drop fires one event.
+        // Ratio-based threshold so it still fires on heavily compressed
+        // masters (EDM) where bass never fully drops out between kicks.
         let bassNow = bandAverage(0..<9)
-        slowBassAverage = slowBassAverage * 0.985 + bassNow * 0.015
+        slowBassAverage = slowBassAverage * 0.98 + bassNow * 0.02
         let now = CACurrentMediaTime()
-        if bassNow > 0.40,
-           bassNow > slowBassAverage + 0.13,
-           now - smoothedSignals.onsetTime > 0.7 {
+        if bassNow > 0.35,
+           bassNow > slowBassAverage * 1.28 + 0.06,
+           now - smoothedSignals.onsetTime > 0.6 {
             smoothedSignals.onsetTime = now
             smoothedSignals.onsetStrength = min(bassNow * 1.25, 1.0)
         }
