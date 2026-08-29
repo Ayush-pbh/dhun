@@ -13,7 +13,10 @@ struct VizUniforms {
     float mid;
     float high;
     float level;
+    float beatAge;      // seconds since the last bass onset
+    float beatStrength; // how hard it hit, 0…1
     float pad;
+    float2 pad2;
     float4 colorA;
     float4 colorB;
 };
@@ -447,6 +450,160 @@ fragment float4 particleFragment(ParticleVertexOut in [[stage_in]],
     float alpha = smoothstep(0.5, 0.1, r);
     float3 color = mix(u.colorA.rgb, u.colorB.rgb, clamp(in.speed * 1.6, 0.0, 1.0));
     return float4(color * alpha * 0.35, 1.0);
+}
+
+// ------------------------------------------------- volumetric explosion ----
+// Adapted for Dhun from "Volumetric explosion" by Duke
+//   https://www.shadertoy.com/view/lsySzd
+// itself based on Duke's "Supernova remnant" (MdKXzc), otaviogood's
+// "Alien Beacon" (ld2SzK), and Shane's "Cheap Cloud Flythrough" (Xsc3R4).
+// Original license: CC BY-NC-SA 3.0 Unported, as declared in the shader.
+// Changes for Dhun: GLSL -> MSL; iChannel texture noise replaced with
+// procedural value noise; keyboard/mouse/split-screen demo inputs removed;
+// the looping `mod(iTime)` animation driver replaced with a bass-onset
+// lifecycle on continuous (never-looping) time; colors routed through the
+// app's tint system; brightness follows the audio level.
+
+static float expNoise(float3 x) {
+    return 1.0 - 0.82 * vnoise3(x);
+}
+
+static float expFbm(float3 p) {
+    return expNoise(p * 0.06125) * 0.5
+         + expNoise(p * 0.125) * 0.25
+         + expNoise(p * 0.25) * 0.125
+         + expNoise(p * 0.4) * 0.2;
+}
+
+// otaviogood's spiral noise; `amount` replaces the original looping
+// -mod(iTime*0.2,-2.) term (0 = newborn dense fireball, 2 = dissolved).
+static float spiralNoise(float3 p, float amount) {
+    const float nudge = 4.0;
+    const float normalizer = 1.0 / sqrt(1.0 + nudge * nudge);
+    float n = amount;
+    float iter = 2.0;
+    for (int i = 0; i < 8; i++) {
+        n += -fabs(sin(p.y * iter) + cos(p.x * iter)) / iter;
+        p.xy += float2(p.y, -p.x) * nudge;
+        p.xy *= normalizer;
+        p.xz += float2(p.z, -p.x) * nudge;
+        p.xz *= normalizer;
+        iter *= 1.733733;
+    }
+    return n;
+}
+
+static float explosionMap(float3 p, float t, float dissolve, float radius) {
+    // Continuous rotation (original used mouse + iTime).
+    float a = t * 0.1;
+    float2 xz = cos(a) * float2(p.x, p.z) + sin(a) * float2(p.z, -p.x);
+    p = float3(xz.x, p.y, xz.y);
+
+    float3 q = p / 0.5;
+    // Slow domain drift so the structure churns forever without looping.
+    float3 drift = float3(t * 0.05, t * 0.033, 0.0);
+    float f = length(q) - radius;
+    f += expFbm(q * 50.0 + drift * 12.0);
+    f += spiralNoise(q.zxy * 0.4132 + 333.0 + drift, dissolve) * 3.0;
+    return f * 0.5;
+}
+
+static float3 explosionColor(float density, float radius, float3 tintA, float3 tintB) {
+    float3 hot = mix(tintB, float3(1.0, 0.95, 0.85), 0.55);
+    float3 cool = tintA * 0.75;
+    float3 result = mix(hot, cool, density);
+    float3 colCenter = 7.0 * mix(float3(0.9), tintB, 0.3);
+    float3 colEdge = 1.5 * mix(tintA, float3(0.5), 0.4);
+    result *= mix(colCenter, colEdge, min((radius + 0.05) / 0.9, 1.15));
+    return result;
+}
+
+static bool raySphere(float3 org, float3 dir, float boundSq,
+                      thread float& nearHit, thread float& farHit) {
+    float b = dot(dir, org);
+    float c = dot(org, org) - boundSq;
+    float delta = b * b - c;
+    if (delta < 0.0) return false;
+    float ds = sqrt(delta);
+    nearHit = -b - ds;
+    farHit = -b + ds;
+    return farHit > 0.0;
+}
+
+fragment float4 explosionFragment(FSQVertexOut in [[stage_in]],
+                                  constant VizUniforms& u [[buffer(0)]]) {
+    float2 fragCoord = in.position.xy;
+    float2 uv = fragCoord / u.resolution;
+    float t = u.time;
+
+    // Explosion lifecycle, driven by the last bass onset instead of a loop.
+    float age = max(u.beatAge, 0.0);
+    float strength = clamp(u.beatStrength, 0.0, 1.0);
+    float grow = 1.0 - exp(-age * 1.8);
+    float energy = strength * exp(-age * 0.45);
+    float dissolve = max(2.0 * (1.0 - exp(-age * 0.5)) - 0.3 * u.mid, 0.0);
+    float radius = 3.1 + 2.6 * grow * (0.5 + 0.5 * strength);
+    float brightness = 0.20 + 0.45 * u.level + 1.7 * energy;
+
+    float3 rd = normalize(float3((fragCoord - 0.5 * u.resolution) / u.resolution.y, 1.0));
+    rd.y = -rd.y;
+    float3 ro = float3(0.0, 0.0, -6.0);
+
+    float ld = 0.0, td = 0.0, w = 0.0;
+    float dcur = 1.0, tt = 0.0;
+    const float h = 0.1;
+    float4 sum = float4(0.0);
+    float minDist = 0.0, maxDist = 0.0;
+
+    float worldR = radius * 0.5;
+    float boundSq = (worldR * 1.3) * (worldR * 1.3);
+
+    float3 lightColor = mix(u.colorB.rgb, float3(1.0), 0.25) * (0.85 + 0.5 * u.high);
+
+    if (raySphere(ro, rd, boundSq, minDist, maxDist)) {
+        tt = minDist * step(tt, minDist);
+
+        for (int i = 0; i < 72; i++) {
+            float3 pos = ro + tt * rd;
+            if (td > 0.9 || dcur < 0.12 * tt || tt > 10.0 || sum.a > 0.99 || tt > maxDist) break;
+
+            float d = explosionMap(pos, t, dissolve, radius);
+            d = max(d, 0.03);
+
+            float3 ldst = float3(0.0) - pos;
+            float lDist = max(length(ldst), 0.001);
+
+            // Central bloom — this is the smoldering ember between hits.
+            sum.rgb += lightColor / exp(lDist * lDist * lDist * 0.08) / 30.0;
+
+            if (d < h) {
+                ld = h - d;
+                w = (1.0 - td) * ld;
+                td += w + 1.0 / 200.0;
+                float4 col = float4(explosionColor(td, lDist, u.colorA.rgb, u.colorB.rgb), td);
+                sum += sum.a * float4(sum.rgb, 0.0) * 0.2 / lDist;
+                col.a *= 0.2;
+                col.rgb *= col.a;
+                sum = sum + col * (1.0 - sum.a);
+            }
+            td += 1.0 / 70.0;
+
+            // Procedural stand-in for the original's dither texture.
+            float2 uvd = float2(uv.y * 120.0, -uv.x * 280.0 + 0.5 * sin(4.0 * t + uv.y * 480.0));
+            d = fabs(d) * (0.8 + 0.08 * vnoise(uvd));
+
+            tt += max(d * 0.08 * max(min(lDist, d), 2.0), 0.01);
+            dcur = d;
+        }
+
+        sum *= 1.0 / exp(ld * 0.2) * 0.8;
+        sum = clamp(sum, 0.0, 1.0);
+        sum.xyz = sum.xyz * sum.xyz * (3.0 - 2.0 * sum.xyz);
+    }
+
+    float3 color = sum.xyz * brightness;
+    color = 1.0 - exp(-color * 2.0);
+    return float4(color, 1.0);
 }
 
 // ------------------------------------------------------ utility passes -----

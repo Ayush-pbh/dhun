@@ -1,6 +1,7 @@
 import Accelerate
 import Combine
 import CoreMedia
+import QuartzCore
 import ScreenCaptureKit
 
 /// The condensed control signals the plasma shader consumes. Each is 0…1,
@@ -11,6 +12,10 @@ struct AudioSignals: Equatable {
     var mid: Float = 0
     var high: Float = 0
     var level: Float = 0
+    /// CACurrentMediaTime of the last detected bass onset ("the drop hit").
+    var onsetTime: Double = -1000
+    /// How hard that onset hit, 0…1.
+    var onsetStrength: Float = 0
 }
 
 /// Captures Spotify's audio output with ScreenCaptureKit and runs it through
@@ -38,6 +43,7 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
     private var hannWindow: [Float]
     private var ringBuffer = [Float]()
     private var smoothedSignals = AudioSignals()
+    private var slowBassAverage: Float = 0
 
     override init() {
         hannWindow = [Float](repeating: 0, count: fftSize)
@@ -65,6 +71,7 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
         sampleQueue.async {
             self.ringBuffer.removeAll()
             self.smoothedSignals = AudioSignals()
+            self.slowBassAverage = 0
         }
         DispatchQueue.main.async {
             self.signals = AudioSignals()
@@ -187,6 +194,18 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
             for i in range { sum += newBands[i] }
             return sum / Float(range.count)
         }
+        // Bass onset: the instantaneous bass jumping well above its own
+        // long-term average, with a cooldown so one drop fires one event.
+        let bassNow = bandAverage(0..<9)
+        slowBassAverage = slowBassAverage * 0.985 + bassNow * 0.015
+        let now = CACurrentMediaTime()
+        if bassNow > 0.40,
+           bassNow > slowBassAverage + 0.13,
+           now - smoothedSignals.onsetTime > 0.7 {
+            smoothedSignals.onsetTime = now
+            smoothedSignals.onsetStrength = min(bassNow * 1.25, 1.0)
+        }
+
         smoothedSignals.bass = smooth(smoothedSignals.bass, bandAverage(0..<9), attack: 0.40, decay: 0.93)
         smoothedSignals.mid = smooth(smoothedSignals.mid, bandAverage(10..<32), attack: 0.50, decay: 0.86)
         smoothedSignals.high = smooth(smoothedSignals.high, bandAverage(34..<Self.bandCount), attack: 0.70, decay: 0.72)

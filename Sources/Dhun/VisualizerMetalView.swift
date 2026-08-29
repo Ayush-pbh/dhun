@@ -12,6 +12,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
     case ink
     case warp
     case murmuration
+    case explosion
 
     var label: String {
         switch self {
@@ -23,6 +24,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .ink: return "Ink in Water"
         case .warp: return "Warp Field"
         case .murmuration: return "Murmuration"
+        case .explosion: return "Volumetric Explosion"
         }
     }
 
@@ -41,6 +43,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .ink: return .feedback("inkFragment")
         case .warp: return .feedback("warpFragment")
         case .murmuration: return .particles
+        case .explosion: return .fullscreen("explosionFragment")
         }
     }
 
@@ -55,6 +58,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .ink: return 0.7
         case .warp: return 0.75
         case .murmuration: return 0.8
+        case .explosion: return 0.5
         }
     }
 }
@@ -152,7 +156,10 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
         var mid: Float
         var high: Float
         var level: Float
+        var beatAge: Float
+        var beatStrength: Float
         var pad: Float = 0
+        var pad2: SIMD2<Float> = .zero
         var colorA: SIMD4<Float>
         var colorB: SIMD4<Float>
     }
@@ -333,13 +340,16 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
 
     private func makeUniforms() -> Uniforms {
         let signals = engine?.signals ?? AudioSignals()
+        let now = CACurrentMediaTime()
         return Uniforms(
             resolution: SIMD2(Float(drawableSize.width), Float(drawableSize.height)),
-            time: Float(CACurrentMediaTime() - startTime),
+            time: Float(now - startTime),
             bass: signals.bass,
             mid: signals.mid,
             high: signals.high,
             level: signals.level,
+            beatAge: Float(min(max(now - signals.onsetTime, 0), 999)),
+            beatStrength: signals.onsetStrength,
             colorA: colorA,
             colorB: colorB
         )

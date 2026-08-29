@@ -133,7 +133,14 @@ header in the source.
 
 ### Shader credits
 
-- *(none yet — ports are credited here as they land)*
+- **Volumetric Explosion** — adapted from ["Volumetric explosion"](https://www.shadertoy.com/view/lsySzd)
+  by **Duke** (CC BY-NC-SA 3.0), itself building on Duke's
+  ["Supernova remnant"](https://www.shadertoy.com/view/MdKXzc), otaviogood's
+  ["Alien Beacon"](https://www.shadertoy.com/view/ld2SzK), and Shane's
+  ["Cheap Cloud Flythrough"](https://www.shadertoy.com/view/Xsc3R4).
+  Changes: GLSL → Metal, texture noise → procedural, the looping animation clock
+  replaced with a bass-onset-driven explosion lifecycle on continuous time,
+  colors routed through Dhun's tint system.
 
 <div align="center">
 <sub>Dhun is an independent project and is not affiliated with or endorsed by Spotify.</sub>
