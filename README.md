@@ -70,6 +70,19 @@ hideable Dock icon, launch at login. Everything is a toggle in **Settings (⌘,)
 
 ## Install
 
+**The easy way — one line in Terminal, no Gatekeeper dialog:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Ayush-pbh/dhun/main/install.sh | sh
+```
+
+Installs the latest release into Applications and launches it. (Browsers stamp
+downloads with macOS's quarantine flag, which triggers the "Apple could not
+verify…" dialog for apps that aren't notarized; `curl` doesn't, so this route
+skips the dialog entirely.)
+
+**Or the classic way:**
+
 1. **[Download Dhun-1.1.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.1.dmg)**
 2. Open it and drag **Dhun** into **Applications**.
 3. First launch: Dhun is not notarized yet, so macOS shows *"Dhun" Not Opened*.
