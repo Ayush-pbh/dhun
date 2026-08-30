@@ -97,6 +97,9 @@ final class AppSettings: ObservableObject {
     @Published var visualizerColorScheme: VisualizerColorScheme {
         didSet { Self.defaults.set(visualizerColorScheme.rawValue, forKey: "plasmaColorScheme") }
     }
+    @Published var visualizerAudioReactive: Bool {
+        didSet { Self.defaults.set(visualizerAudioReactive, forKey: "visualizerAudioReactive") }
+    }
     @Published var debugOverlay: Bool {
         didSet { Self.defaults.set(debugOverlay, forKey: "debugOverlay") }
     }
@@ -142,6 +145,7 @@ final class AppSettings: ObservableObject {
             visualizerMode = (d.object(forKey: "visualizerEnabled") as? Bool ?? false) ? .plasma : .none
         }
         visualizerColorScheme = VisualizerColorScheme(rawValue: d.string(forKey: "plasmaColorScheme") ?? "") ?? .electricBlue
+        visualizerAudioReactive = d.object(forKey: "visualizerAudioReactive") as? Bool ?? true
         debugOverlay = d.object(forKey: "debugOverlay") as? Bool ?? false
         hideDockIcon = d.object(forKey: "hideDockIcon") as? Bool ?? false
         statusItemEnabled = d.object(forKey: "statusItemEnabled") as? Bool ?? true

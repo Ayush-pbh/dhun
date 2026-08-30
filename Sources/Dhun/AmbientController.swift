@@ -53,7 +53,7 @@ final class AmbientController {
         NSApp.activate(ignoringOtherApps: true)
         window = w
 
-        if settings.visualizerMode != .none {
+        if settings.visualizerMode != .none, settings.visualizerAudioReactive {
             visualizer.start()
         }
 
@@ -76,10 +76,12 @@ final class AmbientController {
         window = nil
     }
 
-    /// Applies a visualizer mode change while ambient mode is open.
+    /// Applies a visualizer mode or reactivity change while ambient mode is
+    /// open. With "react to sound" off the capture engine stays stopped, so
+    /// the scenes idle on their quiet-passage motion.
     func refreshVisualizer() {
         guard isActive else { return }
-        if settings.visualizerMode != .none {
+        if settings.visualizerMode != .none, settings.visualizerAudioReactive {
             visualizer.start()
         } else {
             visualizer.stop()
@@ -191,7 +193,7 @@ struct AmbientView: View {
         }
         .overlay(alignment: .topTrailing) {
             if settings.debugOverlay {
-                DebugOverlay(engine: visualizer, stats: stats)
+                DebugOverlay(engine: visualizer, stats: stats, settings: settings)
                     .padding(.top, 44)
                     .padding(.trailing, 28)
             }
@@ -204,12 +206,15 @@ struct AmbientView: View {
 
 }
 
-/// Debug readout: live raw waveform straight from the capture pipeline and
-/// the Metal view's measured frame rate. Isolated in its own view so its
-/// high-frequency updates don't re-render the rest of the ambient scene.
+/// Debug readout: live raw waveform straight from the capture pipeline, the
+/// Metal view's measured frame rate, and quick controls to hop between
+/// visualizations and mute the audio reaction without leaving ambient mode.
+/// Isolated in its own view so its high-frequency updates don't re-render
+/// the rest of the ambient scene.
 private struct DebugOverlay: View {
     @ObservedObject var engine: AudioVisualizerEngine
     @ObservedObject var stats: VisualizerStats
+    @ObservedObject var settings: AppSettings
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 5) {
@@ -241,6 +246,27 @@ private struct DebugOverlay: View {
             ))
             .font(.system(size: 10, weight: .medium, design: .monospaced))
             .foregroundStyle(.green.opacity(0.9))
+
+            Picker("Visualization", selection: $settings.visualizerMode) {
+                ForEach(VisualizerMode.allCases, id: \.self) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .tint(.green)
+            .frame(width: 190)
+
+            Toggle("React to sound", isOn: $settings.visualizerAudioReactive)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .tint(.green)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(.green.opacity(0.9))
         }
+        // Swallow clicks so poking the debug panel doesn't exit ambient mode.
+        .contentShape(Rectangle())
+        .onTapGesture {}
     }
 }
