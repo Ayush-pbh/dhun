@@ -733,6 +733,125 @@ fragment float4 moonwalkFragment(FSQVertexOut in [[stage_in]],
     return float4(color, 1.0);
 }
 
+// ---------------------------------------------------------- cloud canal ----
+// Adapted for Dhun from "Cloud Canal" by Stephane Cuillerdier (Aiekick), 2015
+//   https://www.shadertoy.com/user/aiekick
+// A cloudier variation of Aiekick's "Another Cloudy Tunnel"
+//   (https://www.shadertoy.com/view/4lSXRK); the volumetric cloud technique
+// comes from duke's "Cloudy spikeball" (https://www.shadertoy.com/view/MljXDw),
+// itself a port of a demo part by Las.
+// Original license: CC BY-NC-SA 3.0 Unported, as declared in the shader.
+// Changes for Dhun: GLSL -> MSL; iChannel texture noise replaced with
+// procedural value noise (and the duplicated same-coordinate lookup folded
+// into one call); the fixed forward speed replaced with the music-integrated
+// travel distance; cloud density follows the mids, exposure follows the
+// level; palette routed through the app's tint system (Electric Blue is
+// closest to the original).
+
+static float ccCosPath(float3 p, float3 dec) { return dec.x * cos(p.z * dec.y + dec.z); }
+static float ccSinPath(float3 p, float3 dec) { return dec.x * sin(p.z * dec.y + dec.z); }
+
+static float2 ccCylinder(float3 p, float2 pos, float3 c, float3 s) {
+    return p.xy - pos - float2(ccCosPath(p, c), ccSinPath(p, s));
+}
+
+static float ccPn(float3 x) {
+    return -1.0 + 2.4 * vnoise3(x);
+}
+
+static float ccFpn(float3 p, float t) {
+    p += t * 5.0;
+    // Original: pn(p*.02)*1.98 + pn(p*.02)*.62 + pn(p*.09)*.39 — the first
+    // two sample the same coordinate, folded into one lookup here.
+    return ccPn(p * 0.02) * 2.6 + ccPn(p * 0.09) * 0.39;
+}
+
+static float ccMap(float3 p, float t) {
+    float pnNoise = ccFpn(p * 13.0, t) * 0.8;
+    float path = ccSinPath(p, float3(6.2, 0.33, 0.0));
+    float bottom = p.y + pnNoise;
+    float cyl = 0.0;
+    float2 vecOld = float2(1e6);
+    for (int i = 0; i < 6; i++) {
+        float fi = float(i);
+        float x = 1.0 * fi;
+        float y = 0.88 + 0.0102 * fi;
+        float z = -0.02 - 0.16 * fi;
+        float r = 4.4 + 2.45 * fi;
+        float2 vec = ccCylinder(p, float2(path, 3.7 * fi), float3(x, y, z), float3(z, x, y));
+        cyl = r - min(length(vec), length(vecOld));
+        vecOld = vec;
+    }
+    cyl += pnNoise;
+    cyl = min(cyl, bottom);
+    return cyl;
+}
+
+static float3 ccCam(float2 uv, float3 ro, float3 cu, float3 cv) {
+    float3 rov = normalize(cv - ro);
+    float3 basisU = normalize(cross(cu, rov));
+    float3 basisV = normalize(cross(rov, basisU));
+    float fov = 3.0;
+    return normalize(rov + fov * basisU * uv.x + fov * basisV * uv.y);
+}
+
+fragment float4 cloudcanalFragment(FSQVertexOut in [[stage_in]],
+                                   constant VizUniforms& u [[buffer(0)]]) {
+    float t = u.time * 2.5;
+    float3 tintA = u.colorA.rgb;
+    float3 tintB = u.colorB.rgb;
+
+    float2 si = u.resolution;
+    float2 g = in.position.xy;
+    float2 uv = (2.0 * g - si) / min(si.x, si.y);
+    uv.y = -uv.y;
+
+    float4 f = float4(tintA * 0.5, 1.0);
+
+    float3 p = float3(0.0);
+    float3 ro = float3(0.0);
+    ro.y = sin(t * 0.2) * 15.0 + 15.0;
+    ro.x = sin(t * 0.5) * 5.0;
+    // Music-driven forward motion instead of t * 5.
+    ro.z = u.travel * 0.8;
+
+    float3 rd = ccCam(uv, p, float3(0.0, 1.0, 0.0), p + float3(0.0, 0.0, 1.0));
+
+    float s = 1.0;
+    const float h = 0.15;
+    float td = 0.0;
+    float d = 1.0;
+    float dd = 0.0;
+    float w = 0.0;
+    // Density factor (mouse-tuned in the original); mids thicken the clouds.
+    float densityVar = 0.03 + 0.05 * u.mid;
+
+    for (int i = 0; i < 200; i++) {
+        if (s < 0.01 || d > 500.0 || td > 0.95) break;
+        s = ccMap(p, t) * (s > 0.001 ? densityVar : 0.2);
+        if (s < h) {
+            w = (1.0 - td) * (h - s) * float(i) / 200.0;
+            f += w;
+            td += w;
+        }
+        dd += 0.012;
+        td += 0.005;
+        s = max(s, 0.05);
+        d += s;
+        p = ro + rd * d;
+    }
+
+    float3 fogColor = mix(tintA, tintB, 0.35);
+    f.rgb = mix(f.rgb, fogColor, 1.0 - exp(-0.001 * d * d)) / max(dd, 0.012);
+
+    // Vignette from iq's "Shader Mike".
+    float2 q = g / si;
+    f.rgb *= 0.5 + 0.5 * pow(16.0 * q.x * q.y * (1.0 - q.x) * (1.0 - q.y), 0.25);
+    f.rgb *= 0.85 + 0.35 * u.level;
+
+    return float4(f.rgb, 1.0);
+}
+
 // ------------------------------------------------------ utility passes -----
 
 fragment float4 fadeFragment(FSQVertexOut in [[stage_in]],

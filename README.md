@@ -133,6 +133,14 @@ header in the source.
 
 ### Shader credits
 
+- **Cloud Canal** — adapted from "Cloud Canal" by
+  **[Stephane Cuillerdier (Aiekick)](https://www.shadertoy.com/user/aiekick)**, 2015
+  (CC BY-NC-SA 3.0), a variation of his
+  ["Another Cloudy Tunnel"](https://www.shadertoy.com/view/4lSXRK); cloud technique
+  from duke's ["Cloudy spikeball"](https://www.shadertoy.com/view/MljXDw), itself a
+  port of a demo part by Las. Changes: GLSL → Metal, texture noise → procedural,
+  music-driven forward speed, mids thicken the clouds, level lifts exposure,
+  palette via Dhun's tint system.
 - **MoonWalk** — adapted from "MoonWalk" by
   **[Nikos Papadopoulos (4rknova)](https://www.shadertoy.com/user/4rknova)**, 2015
   (CC BY-NC-SA 3.0). Changes: GLSL → Metal, the fixed flight speed replaced with a
