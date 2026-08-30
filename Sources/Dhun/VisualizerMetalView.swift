@@ -6,37 +6,25 @@ import SwiftUI
 enum VisualizerMode: String, CaseIterable, Hashable {
     case none
     case plasma
-    case nebula
-    case ferrofluid
-    case aurora
     case ink
-    case warp
     case murmuration
     case explosion
     case moonwalk
     case cloudcanal
     case calmflow
     case movement
-    case butterfly
-    case gilled
 
     var label: String {
         switch self {
         case .none: return "None (blurred cover)"
         case .plasma: return "Ambience Plasma"
-        case .nebula: return "Nebula"
-        case .ferrofluid: return "Ferrofluid"
-        case .aurora: return "Aurora"
         case .ink: return "Ink in Water"
-        case .warp: return "Warp Field"
         case .murmuration: return "Murmuration"
         case .explosion: return "Volumetric Explosion"
         case .moonwalk: return "MoonWalk"
         case .cloudcanal: return "Cloud Canal"
         case .calmflow: return "Calm Flow"
         case .movement: return "Movement"
-        case .butterfly: return "Butterfly"
-        case .gilled: return "Gilled"
         }
     }
 
@@ -49,27 +37,14 @@ enum VisualizerMode: String, CaseIterable, Hashable {
     var kind: Kind {
         switch self {
         case .none, .plasma: return .fullscreen("plasmaFragment")
-        case .nebula: return .fullscreen("nebulaFragment")
-        case .ferrofluid: return .fullscreen("ferroFragment")
-        case .aurora: return .fullscreen("auroraFragment")
         case .ink: return .feedback("inkFragment")
-        case .warp: return .feedback("warpFragment")
         case .murmuration: return .particles
         case .explosion: return .fullscreen("explosionFragment")
         case .moonwalk: return .fullscreen("moonwalkFragment")
         case .cloudcanal: return .fullscreen("cloudcanalFragment")
         case .calmflow: return .fullscreen("calmflowFragment")
         case .movement: return .feedback("movementFragment")
-        case .butterfly: return .fullscreen("butterflyFragment")
-        case .gilled: return .feedback("gilledFragment")
         }
-    }
-
-    /// Present pass that turns the offscreen accumulation into the visible
-    /// frame. Gilled's accumulator holds simulation state, not colors, so it
-    /// brings its own mapping; everything else shares the standard tone map.
-    var presentShader: String {
-        self == .gilled ? "gilledPresentFragment" : "presentFragment"
     }
 
     /// Fraction of native resolution to render at. The heavy raymarchers
@@ -77,21 +52,13 @@ enum VisualizerMode: String, CaseIterable, Hashable {
     var renderScale: CGFloat {
         switch self {
         case .none, .plasma: return 1.0
-        case .aurora: return 0.9
-        case .nebula: return 0.55
-        case .ferrofluid: return 0.6
         case .ink: return 0.7
-        case .warp: return 0.75
         case .murmuration: return 0.8
         case .explosion: return 0.5
         case .moonwalk: return 0.55
         case .cloudcanal: return 0.5
         case .calmflow: return 1.0
         case .movement: return 0.75
-        case .butterfly: return 1.0
-        // The reaction-diffusion feature size is fixed in simulation pixels,
-        // so a coarse grid gives chunky gills and a livelier evolution.
-        case .gilled: return 0.25
         }
     }
 }
@@ -455,7 +422,7 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
         case .feedback(let fragment):
             guard let textures = ensureAccumulation(),
                   let update = fullscreenPipeline(fragment: fragment, offscreen: true),
-                  let present = fullscreenPipeline(fragment: mode.presentShader, offscreen: false) else { return }
+                  let present = fullscreenPipeline(fragment: "presentFragment", offscreen: false) else { return }
 
             let updatePass = MTLRenderPassDescriptor()
             updatePass.colorAttachments[0].texture = textures.write

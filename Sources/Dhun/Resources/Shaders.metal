@@ -33,7 +33,6 @@ vertex FSQVertexOut fsqVertex(uint vid [[vertex_id]]) {
 }
 
 constexpr sampler linearSampler(address::clamp_to_edge, filter::linear);
-constexpr sampler repeatSampler(address::repeat, filter::linear);
 
 // ---------------------------------------------------------------- noise ----
 
@@ -186,138 +185,6 @@ fragment float4 plasmaFragment(FSQVertexOut in [[stage_in]],
     return float4(color, 1.0);
 }
 
-// --------------------------------------------------------------- nebula ----
-
-fragment float4 nebulaFragment(FSQVertexOut in [[stage_in]],
-                               constant VizUniforms& u [[buffer(0)]]) {
-    float2 p = (in.position.xy - 0.5 * u.resolution) / u.resolution.y;
-    float t = u.time;
-
-    float3 ro = float3(0.0, 0.0, t * (0.30 + 0.75 * u.bass));
-    float3 rd = normalize(float3(p, 1.15));
-    float sway = 0.12 * sin(t * 0.09);
-    float cs = cos(sway);
-    float sn = sin(sway);
-    rd.xy = float2(rd.x * cs - rd.y * sn, rd.x * sn + rd.y * cs);
-
-    float3 color = u.colorA.rgb * 0.03;
-
-    // Embedded starfield, twinkling with the highs.
-    float star = pow(vnoise(p * 90.0 + float2(0.0, t * 0.4)), 22.0);
-    color += float3(0.85, 0.92, 1.0) * star * (0.5 + 1.4 * u.high);
-
-    float transmittance = 1.0;
-    float travelled = 0.0;
-    for (int i = 0; i < 40; i++) {
-        float3 pos = ro + rd * (1.0 + travelled);
-        float density = fbm3(pos * 0.55 + float3(0.0, t * 0.04, 0.0)) - (0.47 - 0.10 * u.mid);
-        if (density > 0.0) {
-            float d = min(density * 1.5, 1.0);
-            float tone = clamp(pos.y * 0.5 + 0.5 + 0.3 * sin(t * 0.15), 0.0, 1.0);
-            float3 local = mix(u.colorA.rgb, u.colorB.rgb, tone);
-            color += transmittance * d * local * 0.15 * (0.6 + 0.9 * u.level);
-            transmittance *= 1.0 - d * 0.35;
-            if (transmittance < 0.05) break;
-        }
-        travelled += 0.18;
-    }
-
-    float core = exp(-dot(p, p) * 3.0);
-    color += mix(u.colorB.rgb, float3(1.0), 0.4) * core * (0.08 + 0.5 * u.bass);
-
-    color = 1.0 - exp(-color * 2.0);
-    return float4(color, 1.0);
-}
-
-// ----------------------------------------------------------- ferrofluid ----
-
-static float ferroSDF(float3 q, float t, float bass, float mid, float high) {
-    float radius = 0.62 + 0.11 * bass;
-    float3 n = normalize(q + float3(0.0001));
-    float spikes = fbm3(n * (3.5 + 3.0 * mid) + float3(0.0, t * 0.15, 0.0));
-    spikes = pow(max(spikes - 0.34, 0.0), 1.6);
-    float amp = 0.08 + 0.45 * mid;
-    float shimmer = 0.015 * high * vnoise3(n * 24.0 + float3(t * 2.0));
-    return length(q) - radius - amp * spikes - shimmer;
-}
-
-fragment float4 ferroFragment(FSQVertexOut in [[stage_in]],
-                              constant VizUniforms& u [[buffer(0)]]) {
-    float2 p = (in.position.xy - 0.5 * u.resolution) / u.resolution.y;
-    p.y = -p.y;
-    float t = u.time;
-
-    float3 ro = float3(0.0, 0.0, -2.3);
-    float3 rd = normalize(float3(p, 1.6));
-
-    float3 color = u.colorA.rgb * 0.06 * exp(-dot(p, p) * 1.4);
-
-    float dist = 0.0;
-    bool hit = false;
-    float3 pos = ro;
-    for (int i = 0; i < 64; i++) {
-        pos = ro + rd * dist;
-        float d = ferroSDF(pos, t, u.bass, u.mid, u.high);
-        if (d < 0.002) { hit = true; break; }
-        dist += d * 0.8;
-        if (dist > 6.0) break;
-    }
-
-    if (hit) {
-        float e = 0.005;
-        float3 normal = normalize(float3(
-            ferroSDF(pos + float3(e, 0, 0), t, u.bass, u.mid, u.high) - ferroSDF(pos - float3(e, 0, 0), t, u.bass, u.mid, u.high),
-            ferroSDF(pos + float3(0, e, 0), t, u.bass, u.mid, u.high) - ferroSDF(pos - float3(0, e, 0), t, u.bass, u.mid, u.high),
-            ferroSDF(pos + float3(0, 0, e), t, u.bass, u.mid, u.high) - ferroSDF(pos - float3(0, 0, e), t, u.bass, u.mid, u.high)));
-        float3 lightDir = normalize(float3(0.6, 0.8, -0.5));
-        float diffuse = max(dot(normal, lightDir), 0.0);
-        float3 reflected = reflect(rd, normal);
-        float specular = pow(max(dot(reflected, lightDir), 0.0), 42.0);
-        float fresnel = pow(1.0 - max(dot(-rd, normal), 0.0), 3.0);
-        float3 environment = mix(u.colorA.rgb * 0.25, u.colorB.rgb, clamp(reflected.y * 0.5 + 0.5, 0.0, 1.0));
-
-        color = float3(0.015);
-        color += environment * (0.15 + 0.55 * fresnel);
-        color += u.colorB.rgb * fresnel * (0.45 + 0.8 * u.mid);
-        color += float3(1.0) * specular * (0.5 + 0.9 * u.level);
-        color += u.colorA.rgb * diffuse * 0.10;
-    }
-
-    color = 1.0 - exp(-color * 2.2);
-    return float4(color, 1.0);
-}
-
-// --------------------------------------------------------------- aurora ----
-
-fragment float4 auroraFragment(FSQVertexOut in [[stage_in]],
-                               constant VizUniforms& u [[buffer(0)]]) {
-    float2 uv = in.position.xy / u.resolution;
-    float2 p = float2(uv.x * u.resolution.x / u.resolution.y, 1.0 - uv.y);
-    float t = u.time;
-
-    float3 color = float3(0.004, 0.006, 0.012);
-
-    float star = pow(vnoise(p * 120.0), 24.0);
-    color += float3(0.8, 0.9, 1.0) * star * (0.3 + 0.9 * u.high) * smoothstep(0.25, 0.8, p.y);
-
-    for (int i = 0; i < 4; i++) {
-        float fi = float(i);
-        float sway = fbm(float2(p.x * 0.9 + fi * 3.7, t * (0.10 + 0.03 * fi))) * (0.8 + 1.4 * u.bass);
-        float xw = p.x * 1.6 + sway + fi * 1.3 - t * 0.05;
-        float ridge = fbm(float2(xw, fi * 9.1 + t * 0.15));
-        float curtain = pow(clamp(ridge, 0.0, 1.0), 3.0 - 1.5 * u.mid);
-        float y0 = p.y - 0.35 - 0.08 * fi;
-        float vertical = smoothstep(0.02, 0.22, p.y) * exp(-y0 * y0 / (0.05 + 0.18 * curtain));
-        float striation = 0.75 + 0.25 * vnoise(float2(xw * 30.0, p.y * 6.0 - t * 0.8));
-        striation += 0.35 * u.high * vnoise(float2(xw * 80.0, t * 6.0));
-        float3 tint = mix(u.colorB.rgb, u.colorA.rgb, clamp(p.y * 1.6 - 0.2, 0.0, 1.0));
-        color += tint * curtain * vertical * striation * (0.35 + 0.55 * u.level) / (1.0 + fi * 0.6);
-    }
-
-    color = 1.0 - exp(-color * 2.4);
-    return float4(color, 1.0);
-}
-
 // --------------------------------------------------- ink (feedback pass) ---
 
 fragment float4 inkFragment(FSQVertexOut in [[stage_in]],
@@ -342,43 +209,6 @@ fragment float4 inkFragment(FSQVertexOut in [[stage_in]],
     color += u.colorB.rgb * blob1 * (0.04 + 1.9 * u.bass * u.bass + 0.25 * u.level);
     color += u.colorA.rgb * blob2 * (0.03 + 1.2 * u.mid);
     color += mix(u.colorB.rgb, float3(1.0), 0.6) * blob2 * u.high * 0.6;
-
-    return float4(clamp(color, 0.0, 6.0), 1.0);
-}
-
-// -------------------------------------------------- warp (feedback pass) ---
-
-fragment float4 warpFragment(FSQVertexOut in [[stage_in]],
-                             constant VizUniforms& u [[buffer(0)]],
-                             texture2d<float> prev [[texture(0)]]) {
-    float2 uv = in.position.xy / u.resolution;
-    float2 p = (in.position.xy - 0.5 * u.resolution) / u.resolution.y;
-    float t = u.time;
-
-    float2 center = float2(0.5 + 0.08 * sin(t * 0.13), 0.5 + 0.06 * sin(t * 0.19 + 1.0));
-    float2 d = uv - center;
-    float angle = 0.0025 + 0.007 * u.mid;
-    float zoom = 0.988 - 0.014 * u.bass;
-    float ca = cos(angle);
-    float sa = sin(angle);
-    float2 rotated = float2(d.x * ca - d.y * sa, d.x * sa + d.y * ca);
-    float3 color = prev.sample(linearSampler, center + rotated * zoom).rgb * 0.965;
-
-    color += u.colorA.rgb * 0.0035;
-
-    // Twinkling star cells; the feedback zoom stretches them into streaks.
-    for (int i = 0; i < 3; i++) {
-        float fi = float(i) + 1.0;
-        float2 cell = floor(p * (22.0 * fi) + float2(fi * 13.7, fi * 7.9));
-        float rnd = hash21(cell);
-        float star = step(0.9965, rnd) * (0.5 + 0.5 * sin(t * (6.0 + fi * 2.0) + rnd * 40.0));
-        float2 cellUV = fract(p * (22.0 * fi)) - 0.5;
-        star *= exp(-dot(cellUV, cellUV) * 18.0);
-        color += mix(u.colorB.rgb, float3(1.0), 0.5) * star * (0.30 + 1.3 * u.high) / fi;
-    }
-
-    float core = exp(-dot(p, p) * 5.0);
-    color += mix(u.colorB.rgb, float3(1.0), 0.3) * core * 0.02 * (1.0 + 5.0 * u.bass);
 
     return float4(clamp(color, 0.0, 6.0), 1.0);
 }
@@ -947,7 +777,7 @@ fragment float4 movementFragment(FSQVertexOut in [[stage_in]],
 
     // Rotating three-stop tint ramp around the ring.
     float seg = fract(angle + t * 0.015) * 3.0;
-    float3 bright = mix(u.colorB.rgb, float3(1.0), 0.5);
+    float3 bright = mix(u.colorB.rgb, float3(1.0), 0.25);
     float3 srcCol;
     if (seg < 1.0) {
         srcCol = mix(u.colorA.rgb, u.colorB.rgb, seg);
@@ -957,159 +787,10 @@ fragment float4 movementFragment(FSQVertexOut in [[stage_in]],
         srcCol = mix(bright, u.colorA.rgb, seg - 2.0);
     }
 
-    float3 color = prevCol + srcCol * source * (0.10 + 0.35 * u.level);
-    return float4(clamp(color, 0.0, 8.0), 1.0);
-}
-
-// ------------------------------------------------------------ butterfly ----
-// Adapted for Dhun from a user-supplied Shadertoy sketch (no license header;
-// Shadertoy default CC BY-NC-SA 3.0 applies). The source image is displaced
-// radially by the audio spectrum, with the angle mirrored left/right so the
-// warp spreads like butterfly wings; where the warp folds past the edge the
-// colors invert (kept from the original).
-// Changes for Dhun: GLSL -> MSL; the source image is the current album
-// cover (aspect-filled) and the spectrum is Spotify's live audio; the
-// original's angle mapping only ever reached the near-silent top half of
-// the FFT, so it is remapped to span the full spectrum.
-
-fragment float4 butterflyFragment(FSQVertexOut in [[stage_in]],
-                                  constant VizUniforms& u [[buffer(0)]],
-                                  constant float* bands [[buffer(1)]],
-                                  texture2d<float> art [[texture(0)]]) {
-    const float pi = 3.14159265359;
-    float2 uv = in.position.xy / u.resolution;
-    uv.y = 1.0 - uv.y; // GL orientation so the inversion fold lands below
-
-    float2 offset = uv - 0.5;
-
-    // Mirrored angle -> spectrum index: the butterfly symmetry.
-    float angleNorm = (atan2(-fabs(offset.x), offset.y) / (2.0 * pi)) + 1.0; // 0.5…1
-    int bandIndex = clamp(int(fract(angleNorm * 2.0) * 47.0), 0, 47);
-    float vol = bands[bandIndex] * 0.3;
-
-    float len = length(offset);
-    float2 dir = len > 1e-5 ? offset / len : float2(0.0);
-    uv -= len * dir * vol;
-
-    // Sample the cover aspect-filled; repeat wrap so hard warps tile.
-    float aspect = u.resolution.x / u.resolution.y;
-    float2 artUV = 0.5 + float2((uv.x - 0.5) * aspect, uv.y - 0.5) / max(aspect, 1.0);
-    float3 color = art.sample(repeatSampler, artUV).rgb;
-
-    if (uv.y < 0.0) {
-        color = 1.0 - color;
-    }
-
-    return float4(color, 1.0);
-}
-
-// -------------------------------------------------------------- gilled -----
-// Original for Dhun — not a ported shader. A Gray-Scott reaction-diffusion
-// simulation (Pearson's model) living in the feedback accumulator:
-// r = chemical A, g = chemical B, one simulation step per frame. The
-// coral/fingerprint parameter regime grows the labyrinthine "gill" stripes.
-// The music feeds the petri dish rather than drawing on it: bass onsets
-// splash fresh droplets of B, a slowly wandering trickle keeps the culture
-// alive through silence, mids lean the feed rate (growth temperament),
-// highs sprinkle fine specks that either fizzle or seed new gills, and the
-// overall level winds the simulation clock.
-
-static float gilledBlob(float2 p, float2 center, float radius) {
-    return smoothstep(radius, radius * 0.35, distance(p, center));
-}
-
-fragment float4 gilledFragment(FSQVertexOut in [[stage_in]],
-                               constant VizUniforms& u [[buffer(0)]],
-                               constant float* bands [[buffer(1)]],
-                               texture2d<float> prev [[texture(0)]]) {
-    float2 p = in.position.xy;
-    float2 uv = p / u.resolution;
-    float2 texel = 1.0 / u.resolution;
-    float minRes = min(u.resolution.x, u.resolution.y);
-
-    float4 c = prev.sample(linearSampler, uv);
-
-    // Fresh dish (accumulator cleared to black): chemical A everywhere plus
-    // a few starter droplets of B so the pattern begins growing immediately.
-    if (c.r + c.g < 0.001) {
-        float b = 0.0;
-        for (int i = 0; i < 5; i++) {
-            float2 seat = 0.15 + 0.7 * hash22(float2(float(i) * 13.7 + 3.1, float(i) * 7.9 + 11.4));
-            b = max(b, gilledBlob(p, seat * u.resolution, minRes * 0.02));
-        }
-        return float4(1.0, b, 0.0, 1.0);
-    }
-
-    // 3x3 Laplacian of both chemicals at once.
-    float2 lap = -c.rg;
-    lap += 0.20 * prev.sample(linearSampler, uv + float2( texel.x, 0.0)).rg;
-    lap += 0.20 * prev.sample(linearSampler, uv + float2(-texel.x, 0.0)).rg;
-    lap += 0.20 * prev.sample(linearSampler, uv + float2(0.0,  texel.y)).rg;
-    lap += 0.20 * prev.sample(linearSampler, uv + float2(0.0, -texel.y)).rg;
-    lap += 0.05 * prev.sample(linearSampler, uv + texel).rg;
-    lap += 0.05 * prev.sample(linearSampler, uv - texel).rg;
-    lap += 0.05 * prev.sample(linearSampler, uv + float2( texel.x, -texel.y)).rg;
-    lap += 0.05 * prev.sample(linearSampler, uv + float2(-texel.x,  texel.y)).rg;
-
-    float feed = 0.0545 + (u.mid - 0.3) * 0.008;
-    float kill = 0.0620 + u.high * 0.0012;
-    float dt = 0.9 + 0.5 * u.level;
-
-    float A = c.r;
-    float B = c.g;
-    float reaction = A * B * B;
-    A += (1.00 * lap.x - reaction + feed * (1.0 - A)) * dt;
-    B += (0.50 * lap.y + reaction - (kill + feed) * B) * dt;
-
-    // Bass onsets splash droplets into the dish — positions keyed to the
-    // onset's timestamp so one hit lands one fixed splash pattern.
-    if (u.beatAge < 0.10) {
-        float stamp = floor((u.time - u.beatAge) * 10.0);
-        int drops = 2 + int(u.beatStrength * 3.0);
-        for (int i = 0; i < drops; i++) {
-            float2 seat = 0.1 + 0.8 * hash22(float2(stamp * 1.618 + float(i) * 13.7,
-                                                    stamp * 2.113 + float(i) * 7.3));
-            B = max(B, gilledBlob(p, seat * u.resolution, minRes * (0.008 + 0.012 * u.beatStrength)));
-        }
-    }
-
-    // A wandering trickle keeps the culture alive through silence.
-    float2 wander = u.resolution * (0.5 + 0.36 * float2(sin(u.time * 0.13 + sin(u.time * 0.052) * 2.0),
-                                                        cos(u.time * 0.094)));
-    B = max(B, gilledBlob(p, wander, minRes * 0.006) * 0.85);
-
-    // High-frequency sparkle: tiny specks, mostly below the critical size,
-    // so they flicker and die — but the odd one seeds a new gill.
-    float speck = hash21(floor(p / 3.0) + floor(u.time * 6.0) * 0.173);
-    if (speck > 1.0 - u.high * 0.002) {
-        B = max(B, 0.55);
-    }
-
-    return float4(clamp(A, 0.0, 1.0), clamp(B, 0.0, 1.0), 0.0, 1.0);
-}
-
-fragment float4 gilledPresentFragment(FSQVertexOut in [[stage_in]],
-                                      constant VizUniforms& u [[buffer(0)]],
-                                      texture2d<float> accum [[texture(0)]]) {
-    float2 uv = in.position.xy / u.resolution;
-    float2 texel = 1.0 / u.resolution;
-    float B = accum.sample(linearSampler, uv).g;
-
-    // Stripes from the B concentration, with a soft relief light from its
-    // gradient so the gills read as ridges rather than flat ink.
-    float stripes = smoothstep(0.16, 0.34, B);
-    float bX = accum.sample(linearSampler, uv + float2(texel.x, 0.0)).g;
-    float bY = accum.sample(linearSampler, uv + float2(0.0, texel.y)).g;
-    float light = clamp(0.5 + 9.0 * (bX - B) - 6.0 * (bY - B), 0.15, 1.15);
-
-    float3 background = u.colorA.rgb * 0.10;
-    float3 ridge = mix(u.colorA.rgb, u.colorB.rgb, smoothstep(0.20, 0.55, B));
-    float3 color = mix(background, ridge * light, stripes);
-    color *= 0.85 + 0.35 * u.level;
-
-    float2 v = uv - 0.5;
-    color *= 1.0 - dot(v, v) * 0.55;
-    return float4(color, 1.0);
+    // Kept modest so accumulated paint stays colored instead of blowing out
+    // to white through the tone map.
+    float3 color = prevCol + srcCol * source * (0.08 + 0.22 * u.level);
+    return float4(clamp(color, 0.0, 3.0), 1.0);
 }
 
 // ------------------------------------------------------ utility passes -----

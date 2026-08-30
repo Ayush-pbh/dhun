@@ -17,7 +17,7 @@ No Electron. No JavaScript. No web views.
 
 <img src="docs/banner.png" alt="Dhun banner" width="100%">
 
-**[⬇ Download Dhun.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.0.dmg)**
+**[⬇ Download Dhun.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.1.dmg)**
 
 </div>
 
@@ -49,16 +49,18 @@ artwork, live progress, and playback controls.
 ✨ **Moments** — a brief toast on track change, and a full-screen **Ambient mode**
 (drifting blurred backdrop, sharp cover, big type) for when the Mac is docked.
 
-🌌 **Seven visualizers** — full-screen generative Metal scenes in Ambient mode, all
+🌌 **Eight visualizers** — full-screen generative Metal scenes in Ambient mode, all
 steered by Spotify's *actual audio* (ScreenCaptureKit filtered to Spotify + Accelerate
 FFT), never a bar chart: **Ambience Plasma** (WMP-era energy clouds and tendrils),
-**Nebula** (raymarched volumetric flight), **Ferrofluid** (a spiking liquid-metal
-creature), **Aurora** (swaying light curtains), **Ink in Water** (frame-feedback blooms
-that remember the song), **Warp Field** (hyperspace streaks that accelerate with bass),
-and **Murmuration** (a 14,000-bird GPU flock). Five color moods or live album-palette
-tints; bass moves the large masses, mids stir turbulence, highs add flicker, and every
-scene stays alive in quiet passages. Needs the screen & system audio recording
-permission — never touches the microphone.
+**Ink in Water** (frame-feedback blooms that remember the song), **Murmuration**
+(a 14,000-bird GPU flock), **Volumetric Explosion** (raymarched blasts that detonate
+on bass hits), **MoonWalk** (a moonlit flight whose speed rides the music),
+**Cloud Canal** and **Calm Flow** (serene scenes that borrow only your colors), and
+**Movement** (the spectrum painted into drifting light). Five color moods or live
+album-palette tints; bass moves the large masses, mids stir turbulence, highs add
+flicker, and every scene stays alive in quiet passages — or flip **React to sound**
+off for pure ambience. Needs the screen & system audio recording permission — never
+touches the microphone.
 
 🕹️ **Controls where you want them** — hover the square for a **Liquid Glass** control
 pill (macOS 26), scroll on it for volume, or use the menu bar item.
@@ -68,7 +70,7 @@ hideable Dock icon, launch at login. Everything is a toggle in **Settings (⌘,)
 
 ## Install
 
-1. **[Download Dhun-1.0.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.0.dmg)**
+1. **[Download Dhun-1.1.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.1.dmg)**
 2. Open it and drag **Dhun** into **Applications**.
 3. First launch: **right-click → Open** (Dhun is not notarized yet, so plain
    double-click will be blocked by Gatekeeper the first time).
@@ -133,11 +135,9 @@ header in the source.
 
 ### Shader credits
 
-- **Butterfly** — adapted from an unattributed Shadertoy sketch (Shadertoy default
-  license, CC BY-NC-SA 3.0): spectrum-driven radial displacement with mirrored
-  butterfly symmetry. Changes: GLSL → Metal, the source image is the current album
-  cover, Spotify's live spectrum drives the warp (remapped to span the full range),
-  aspect-filled sampling.
+**Ambience Plasma**, **Ink in Water**, **Murmuration**, and **Movement** are
+original scenes by **Ayush Tripathi**. The adapted ones:
+
 - **Calm Flow** — adapted from "Calm Flow" by **Sebastien Durand**, 2014
   (CC BY-NC-SA 3.0), building on iq's
   [bicubic filtering](https://www.shadertoy.com/view/XsSXDy), the
@@ -154,10 +154,6 @@ header in the source.
   port of a demo part by Las. Changes: GLSL → Metal, texture noise → procedural,
   cloud whites softened toward the accent tint, palette via Dhun's tint system.
   Intentionally not audio-reactive — only its colors follow the scheme.
-- **Gilled** — an original Gray-Scott reaction-diffusion simulation written
-  for Dhun (no ported code), inspired by the reaction-diffusion visualizers
-  on Shadertoy. Bass onsets splash droplets into the dish; the labyrinthine
-  "gill" stripes grow from there.
 - **MoonWalk** — adapted from "MoonWalk" by
   **[Nikos Papadopoulos (4rknova)](https://www.shadertoy.com/user/4rknova)**, 2015
   (CC BY-NC-SA 3.0). Changes: GLSL → Metal, the fixed flight speed replaced with a

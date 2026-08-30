@@ -15,8 +15,8 @@ struct SettingsView: View {
                 .tabItem { Label("Extras", systemImage: "sparkles") }
             generalTab
                 .tabItem { Label("General", systemImage: "gearshape") }
-            labsTab
-                .tabItem { Label("Labs", systemImage: "testtube.2") }
+            aboutTab
+                .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 500, height: 580)
     }
@@ -129,16 +129,17 @@ struct SettingsView: View {
                         Text(mode.label).tag(mode)
                     }
                 }
-                if settings.visualizerMode != .none {
-                    Picker("Colors", selection: $settings.visualizerColorScheme) {
-                        ForEach(VisualizerColorScheme.allCases, id: \.self) { scheme in
-                            Text(scheme.label).tag(scheme)
-                        }
+                Picker("Colors", selection: $settings.visualizerColorScheme) {
+                    ForEach(VisualizerColorScheme.allCases, id: \.self) { scheme in
+                        Text(scheme.label).tag(scheme)
                     }
-                    Toggle("React to sound", isOn: $settings.visualizerAudioReactive)
-                    Toggle("Debug overlay (waveform + FPS)", isOn: $settings.debugOverlay)
                 }
-                Text("Full-screen generative scenes that breathe with the music — plasma, volumetric nebula, liquid-metal ferrofluid, aurora curtains, ink blooms with memory, a hyperspace warp, or a flocking murmuration. Driven by Spotify's actual audio — macOS asks once for the screen & system audio recording permission; Dhun never touches the microphone.")
+                .disabled(settings.visualizerMode == .none)
+                Toggle("React to sound", isOn: $settings.visualizerAudioReactive)
+                    .disabled(settings.visualizerMode == .none)
+                Toggle("Debug overlay (waveform, FPS, live controls)", isOn: $settings.debugOverlay)
+                    .disabled(settings.visualizerMode == .none)
+                Text("Full-screen generative scenes that breathe with the music — energy-cloud plasma, ink blooms that remember the song, a 14,000-bird murmuration, bass-triggered volumetric explosions, a moonlit flight, drifting cloudscapes, a calm isoline flow, and spectrum-painted movement. Driven by Spotify's actual audio — macOS asks once for the screen & system audio recording permission; Dhun never touches the microphone. With React to sound off, scenes keep their idle drift and no audio is captured.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -169,11 +170,69 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
-    // MARK: - Labs
+    // MARK: - About
 
-    private var labsTab: some View {
+    private var appVersion: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        return "Version \(short)"
+    }
+
+    private var aboutTab: some View {
         Form {
-            Section("Planned — not built yet") {
+            Section {
+                HStack(spacing: 16) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 64, height: 64)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Dhun · धुन")
+                            .font(.title2.weight(.bold))
+                        Text(appVersion)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Text("Whatever Spotify is playing, living on your desktop as art.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+
+            Section("Links") {
+                Link(destination: URL(string: "https://github.com/Ayush-pbh/dhun")!) {
+                    Label("Source on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                Link(destination: URL(string: "https://github.com/Ayush-pbh/dhun/issues")!) {
+                    Label("Report an issue", systemImage: "ladybug")
+                }
+                Link(destination: URL(string: "https://ayusht.me")!) {
+                    Label("ayusht.me", systemImage: "globe")
+                }
+            }
+
+            Section("Credits") {
+                LabeledContent("App & design", value: "Ayush Tripathi")
+                LabeledContent("Ambience Plasma", value: "Ayush Tripathi")
+                LabeledContent("Ink in Water · Murmuration · Movement", value: "Ayush Tripathi")
+                LabeledContent("Volumetric Explosion", value: "Duke")
+                LabeledContent("MoonWalk", value: "Nikos Papadopoulos (4rknova)")
+                LabeledContent("Cloud Canal", value: "Stéphane Cuillerdier (Aiekick)")
+                LabeledContent("Calm Flow", value: "Sebastien Durand")
+                Text("The last four scenes are adapted from Shadertoy works published under CC BY-NC-SA 3.0; each carries a full attribution header in the source and the README.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("License") {
+                Link(destination: URL(string: "https://github.com/Ayush-pbh/dhun/blob/main/LICENSE")!) {
+                    Label("CC BY-NC-SA 4.0", systemImage: "doc.text")
+                }
+                Text("© 2026 Ayush Tripathi. Free to use, modify, and share for non-commercial purposes, with attribution, under the same license.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Roadmap") {
                 Label("Album wall — listening-history collage wallpaper", systemImage: "square.grid.3x3")
                     .foregroundStyle(.secondary)
                 Label("Cassette & CD personas", systemImage: "recordingtape")
