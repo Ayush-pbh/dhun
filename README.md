@@ -133,6 +133,12 @@ header in the source.
 
 ### Shader credits
 
+- **MoonWalk** — adapted from "MoonWalk" by
+  **[Nikos Papadopoulos (4rknova)](https://www.shadertoy.com/user/4rknova)**, 2015
+  (CC BY-NC-SA 3.0). Changes: GLSL → Metal, the fixed flight speed replaced with a
+  music-driven integrated travel distance, moonlight routed through Dhun's tint
+  system, grain follows the highs, camera sway follows the mids.
+
 - **Volumetric Explosion** — adapted from ["Volumetric explosion"](https://www.shadertoy.com/view/lsySzd)
   by **Duke** (CC BY-NC-SA 3.0), itself building on Duke's
   ["Supernova remnant"](https://www.shadertoy.com/view/MdKXzc), otaviogood's

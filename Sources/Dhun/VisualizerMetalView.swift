@@ -13,6 +13,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
     case warp
     case murmuration
     case explosion
+    case moonwalk
 
     var label: String {
         switch self {
@@ -25,6 +26,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .warp: return "Warp Field"
         case .murmuration: return "Murmuration"
         case .explosion: return "Volumetric Explosion"
+        case .moonwalk: return "MoonWalk"
         }
     }
 
@@ -44,6 +46,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .warp: return .feedback("warpFragment")
         case .murmuration: return .particles
         case .explosion: return .fullscreen("explosionFragment")
+        case .moonwalk: return .fullscreen("moonwalkFragment")
         }
     }
 
@@ -59,6 +62,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .warp: return 0.75
         case .murmuration: return 0.8
         case .explosion: return 0.5
+        case .moonwalk: return 0.55
         }
     }
 }
@@ -133,6 +137,8 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
 
     private var frameCount = 0
     private var lastFPSStamp = CACurrentMediaTime()
+    private var travel: Float = 0
+    private var lastTravelStamp = CACurrentMediaTime()
 
     var mode: VisualizerMode = .plasma {
         didSet {
@@ -167,7 +173,7 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
         var level: Float
         var beatAge: Float
         var beatStrength: Float
-        var pad: Float = 0
+        var travel: Float
         var pad2: SIMD2<Float> = .zero
         var colorA: SIMD4<Float>
         var colorB: SIMD4<Float>
@@ -350,6 +356,13 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
     private func makeUniforms() -> Uniforms {
         let signals = engine?.signals ?? AudioSignals()
         let now = CACurrentMediaTime()
+
+        // Integrated flight distance: speed follows the music, position
+        // stays continuous so there are never jumps.
+        let dt = Float(min(max(now - lastTravelStamp, 0), 0.1))
+        lastTravelStamp = now
+        travel += dt * (8.0 + 30.0 * signals.level + 22.0 * signals.bass)
+
         return Uniforms(
             resolution: SIMD2(Float(drawableSize.width), Float(drawableSize.height)),
             time: Float(now - startTime),
@@ -359,6 +372,7 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
             level: signals.level,
             beatAge: Float(min(max(now - signals.onsetTime, 0), 999)),
             beatStrength: signals.onsetStrength,
+            travel: travel,
             colorA: colorA,
             colorB: colorB
         )

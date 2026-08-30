@@ -15,7 +15,7 @@ struct VizUniforms {
     float level;
     float beatAge;      // seconds since the last bass onset
     float beatStrength; // how hard it hit, 0…1
-    float pad;
+    float travel;       // CPU-integrated flight distance, speed follows music
     float2 pad2;
     float4 colorA;
     float4 colorB;
@@ -608,6 +608,128 @@ fragment float4 explosionFragment(FSQVertexOut in [[stage_in]],
     color = max(mix(float3(luma), color, 1.45), 0.0);
 
     color = 1.0 - exp(-color * 2.3);
+    return float4(color, 1.0);
+}
+
+// ------------------------------------------------------------- moonwalk ----
+// Adapted for Dhun from "MoonWalk" by Nikos Papadopoulos (4rknova), 2015
+//   https://www.shadertoy.com/user/4rknova
+// Original license: CC BY-NC-SA 3.0 Unported, as declared in the shader.
+// Changes for Dhun: GLSL -> MSL; the fixed SPEED * iTime flight replaced
+// with a CPU-integrated travel distance driven by the music's level and
+// bass (faster over the surface as the song swells, no time jumps);
+// moonlight routed through the app's tint system; film grain follows the
+// highs; camera sway widens with the mids.
+
+static float mwHash1(float n) {
+    return fract(sin(n) * 43758.5453123);
+}
+
+static float mwHash2(float2 p) {
+    return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453123);
+}
+
+static float mwNoise(float2 p) {
+    float2 i = floor(p);
+    float2 f = fract(p);
+    f *= f * (3.0 - 2.0 * f);
+    float2 c = float2(0.0, 1.0);
+    return mix(mix(mwHash2(i + c.xx), mwHash2(i + c.yx), f.x),
+               mix(mwHash2(i + c.xy), mwHash2(i + c.yy), f.x), f.y);
+}
+
+static float mwFbm(float2 p) {
+    return 0.5000 * mwNoise(p)
+         + 0.2500 * mwNoise(p * 2.0)
+         + 0.1250 * mwNoise(p * 4.0)
+         + 0.0625 * mwNoise(p * 8.0);
+}
+
+static float mwDst(float3 p) {
+    return dot(float3(p.x,
+                      p.y
+                      + 0.45 * mwFbm(p.zx)
+                      + 2.55 * mwNoise(0.1 * p.xz)
+                      + 0.83 * mwNoise(0.4 * p.xz)
+                      + 3.33 * mwNoise(0.001 * p.xz)
+                      + 3.59 * mwNoise(0.0005 * (p.xz + 132.453)),
+                      p.z),
+               float3(0.0, 1.0, 0.0));
+}
+
+static float3 mwNrm(float3 p, float d) {
+    const float e = 0.001;
+    return normalize(float3(mwDst(float3(p.x + e, p.y, p.z)),
+                            mwDst(float3(p.x, p.y + e, p.z)),
+                            mwDst(float3(p.x, p.y, p.z + e))) - d);
+}
+
+static bool mwMarch(float3 ro, float3 rd, thread float3& p, thread float3& n) {
+    p = ro;
+    float3 pos = p;
+    float d = 1.0;
+    for (int i = 0; i < 64; i++) {
+        d = mwDst(pos);
+        if (d < 0.001) {
+            p = pos;
+            break;
+        }
+        pos += d * rd;
+    }
+    n = mwNrm(p, d);
+    return d < 0.001;
+}
+
+fragment float4 moonwalkFragment(FSQVertexOut in [[stage_in]],
+                                 constant VizUniforms& u [[buffer(0)]]) {
+    float2 uv = in.position.xy / u.resolution * 2.0 - 1.0;
+    uv.y = -uv.y;
+
+    // The original's cinematic letterbox.
+    if (fabs(0.001 + uv.y) >= 0.7) {
+        return float4(0.0, 0.0, 0.0, 1.0);
+    }
+
+    float t = u.time;
+    float2 uvn = uv * float2(u.resolution.x / u.resolution.y, 1.0);
+
+    // Music-driven flight distance instead of SPEED * t.
+    float vel = u.travel;
+
+    float sway = 1.5 + 2.0 * u.mid;
+    float3 cu = float3(2.0 * mwNoise(float2(0.3 * t)) - 1.0,
+                       1.0,
+                       1.0 * mwFbm(float2(0.8 * t)));
+    float3 cp = float3(0.0, 3.1 + mwNoise(float2(t)) * 3.1, vel);
+    float3 ct = float3(sway * sin(t),
+                       -2.0 + cos(t) + mwFbm(cp.xz) * 0.4,
+                       13.0 + vel);
+
+    const float pi = 3.14159265359;
+    float3 ro = cp;
+    float3 rd = normalize(float3(uvn, 1.0 / tan(60.0 * 180.0 / pi)));
+
+    float3 cd = ct - cp;
+    float3 rz = normalize(cd);
+    float3 rx = normalize(cross(rz, cu));
+    float3 ry = normalize(cross(rx, rz));
+    rd = normalize(float3x3(rx, ry, rz) * rd);
+
+    float3 sp;
+    float3 sn;
+    float3 color = float3(0.0);
+    if (mwMarch(ro, rd, sp, sn)) {
+        float diffuse = max(dot(sn, normalize(float3(cp.x, cp.y + 0.5, cp.z) - sp)), 0.0);
+        // Moonlight through the tint system; level lifts the exposure.
+        float3 lightRamp = mix(u.colorA.rgb, mix(u.colorB.rgb, float3(1.0), 0.35), diffuse);
+        color = 0.75 * lightRamp * diffuse * (0.75 + 0.5 * u.level);
+    }
+
+    color *= 1.75 * smoothstep(length(uv) * 0.35, 0.75, 0.4);
+    float grain = mwHash1((mwHash1(uv.x) + uv.y) * t) * (0.10 + 0.20 * u.high);
+    color += grain;
+    color *= smoothstep(0.001, 3.5, t);
+
     return float4(color, 1.0);
 }
 
