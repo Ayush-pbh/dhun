@@ -33,6 +33,7 @@ vertex FSQVertexOut fsqVertex(uint vid [[vertex_id]]) {
 }
 
 constexpr sampler linearSampler(address::clamp_to_edge, filter::linear);
+constexpr sampler repeatSampler(address::repeat, filter::linear);
 
 // ---------------------------------------------------------------- noise ----
 
@@ -909,41 +910,6 @@ fragment float4 calmflowFragment(FSQVertexOut in [[stage_in]],
     return float4(col, 1.0);
 }
 
-// ---------------------------------------------------------------- dream ----
-// Original Dhun scene. The album artwork is the source material: every frame
-// the previous image is advected through a slow curl-noise flow while a
-// faint stream of the real cover seeps back in, so the art perpetually melts
-// and reforms without ever dissolving. By design not audio-reactive; the
-// colors come entirely from the current album cover.
-
-fragment float4 dreamFragment(FSQVertexOut in [[stage_in]],
-                              constant VizUniforms& u [[buffer(0)]],
-                              texture2d<float> prev [[texture(0)]],
-                              texture2d<float> art [[texture(1)]]) {
-    float2 uv = in.position.xy / u.resolution;
-    float2 p = (in.position.xy - 0.5 * u.resolution) / u.resolution.y;
-    float t = u.time;
-
-    // Slow dream current: curl flow plus a barely-there swirl around center.
-    float2 flow = curl2(p * 2.6 + float2(0.0, t * 0.03)) * 0.0011;
-    float2 centered = uv - 0.5;
-    float swirl = 0.0004;
-    float2 rotated = float2(centered.x * cos(swirl) - centered.y * sin(swirl),
-                            centered.x * sin(swirl) + centered.y * cos(swirl));
-    float3 prevCol = prev.sample(linearSampler, 0.5 + rotated * 0.9996 + flow).rgb;
-
-    // The cover, aspect-filled, breathing and wandering very slowly.
-    float aspect = u.resolution.x / u.resolution.y;
-    float zoom = max(aspect, 1.0) * (1.10 + 0.05 * sin(t * 0.05));
-    float2 wander = 0.02 * float2(sin(t * 0.037), cos(t * 0.049));
-    float2 artUV = 0.5 + float2((uv.x - 0.5) * aspect, uv.y - 0.5) / zoom + wander;
-    float3 artCol = art.sample(linearSampler, artUV).rgb;
-
-    // Fresh artwork seeps in; the flow does the painting.
-    float3 color = mix(prevCol, artCol, 0.02);
-    return float4(clamp(color, 0.0, 1.0), 1.0);
-}
-
 // ------------------------------------------------------------- movement ----
 // Original Dhun scene, a sibling of Dream: the same slow feedback current,
 // but the source material is the music itself instead of the album art.
@@ -995,6 +961,48 @@ fragment float4 movementFragment(FSQVertexOut in [[stage_in]],
     return float4(clamp(color, 0.0, 8.0), 1.0);
 }
 
+// ------------------------------------------------------------ butterfly ----
+// Adapted for Dhun from a user-supplied Shadertoy sketch (no license header;
+// Shadertoy default CC BY-NC-SA 3.0 applies). The source image is displaced
+// radially by the audio spectrum, with the angle mirrored left/right so the
+// warp spreads like butterfly wings; where the warp folds past the edge the
+// colors invert (kept from the original).
+// Changes for Dhun: GLSL -> MSL; the source image is the current album
+// cover (aspect-filled) and the spectrum is Spotify's live audio; the
+// original's angle mapping only ever reached the near-silent top half of
+// the FFT, so it is remapped to span the full spectrum.
+
+fragment float4 butterflyFragment(FSQVertexOut in [[stage_in]],
+                                  constant VizUniforms& u [[buffer(0)]],
+                                  constant float* bands [[buffer(1)]],
+                                  texture2d<float> art [[texture(0)]]) {
+    const float pi = 3.14159265359;
+    float2 uv = in.position.xy / u.resolution;
+    uv.y = 1.0 - uv.y; // GL orientation so the inversion fold lands below
+
+    float2 offset = uv - 0.5;
+
+    // Mirrored angle -> spectrum index: the butterfly symmetry.
+    float angleNorm = (atan2(-fabs(offset.x), offset.y) / (2.0 * pi)) + 1.0; // 0.5…1
+    int bandIndex = clamp(int(fract(angleNorm * 2.0) * 47.0), 0, 47);
+    float vol = bands[bandIndex];
+
+    float len = length(offset);
+    float2 dir = len > 1e-5 ? offset / len : float2(0.0);
+    uv -= len * dir * vol;
+
+    // Sample the cover aspect-filled; repeat wrap so hard warps tile.
+    float aspect = u.resolution.x / u.resolution.y;
+    float2 artUV = 0.5 + float2((uv.x - 0.5) * aspect, uv.y - 0.5) / max(aspect, 1.0);
+    float3 color = art.sample(repeatSampler, artUV).rgb;
+
+    if (uv.y < 0.0) {
+        color = 1.0 - color;
+    }
+
+    return float4(color, 1.0);
+}
+
 // ------------------------------------------------------ utility passes -----
 
 fragment float4 fadeFragment(FSQVertexOut in [[stage_in]],
@@ -1014,11 +1022,3 @@ fragment float4 presentFragment(FSQVertexOut in [[stage_in]],
     return float4(color, 1.0);
 }
 
-// Plain copy without the HDR tone map — for scenes like Dream where the
-// accumulation already holds display-ready album colors.
-fragment float4 presentLinearFragment(FSQVertexOut in [[stage_in]],
-                                      constant VizUniforms& u [[buffer(0)]],
-                                      texture2d<float> src [[texture(0)]]) {
-    float2 uv = in.position.xy / u.resolution;
-    return float4(clamp(src.sample(linearSampler, uv).rgb, 0.0, 1.0), 1.0);
-}

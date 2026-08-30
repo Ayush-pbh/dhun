@@ -16,8 +16,8 @@ enum VisualizerMode: String, CaseIterable, Hashable {
     case moonwalk
     case cloudcanal
     case calmflow
-    case dream
     case movement
+    case butterfly
 
     var label: String {
         switch self {
@@ -33,8 +33,8 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .moonwalk: return "MoonWalk"
         case .cloudcanal: return "Cloud Canal"
         case .calmflow: return "Calm Flow"
-        case .dream: return "Dream"
         case .movement: return "Movement"
+        case .butterfly: return "Butterfly"
         }
     }
 
@@ -57,15 +57,9 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .moonwalk: return .fullscreen("moonwalkFragment")
         case .cloudcanal: return .fullscreen("cloudcanalFragment")
         case .calmflow: return .fullscreen("calmflowFragment")
-        case .dream: return .feedback("dreamFragment")
         case .movement: return .feedback("movementFragment")
+        case .butterfly: return .fullscreen("butterflyFragment")
         }
-    }
-
-    /// The feedback/particle modes end with a present pass; Dream skips the
-    /// HDR tone map so the album colors stay faithful.
-    var presentShader: String {
-        self == .dream ? "presentLinearFragment" : "presentFragment"
     }
 
     /// Fraction of native resolution to render at. The heavy raymarchers
@@ -83,8 +77,8 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .moonwalk: return 0.55
         case .cloudcanal: return 0.5
         case .calmflow: return 1.0
-        case .dream: return 0.8
         case .movement: return 0.75
+        case .butterfly: return 1.0
         }
     }
 }
@@ -441,13 +435,14 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
             bandsCopy.withUnsafeBytes { raw in
                 encoder.setFragmentBytes(raw.baseAddress!, length: raw.count, index: 1)
             }
+            encoder.setFragmentTexture(artworkTexture ?? fallbackArtTexture, index: 0)
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             encoder.endEncoding()
 
         case .feedback(let fragment):
             guard let textures = ensureAccumulation(),
                   let update = fullscreenPipeline(fragment: fragment, offscreen: true),
-                  let present = fullscreenPipeline(fragment: mode.presentShader, offscreen: false) else { return }
+                  let present = fullscreenPipeline(fragment: "presentFragment", offscreen: false) else { return }
 
             let updatePass = MTLRenderPassDescriptor()
             updatePass.colorAttachments[0].texture = textures.write
@@ -464,7 +459,6 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
                 updateEncoder.setFragmentBytes(raw.baseAddress!, length: raw.count, index: 1)
             }
             updateEncoder.setFragmentTexture(textures.read, index: 0)
-            updateEncoder.setFragmentTexture(artworkTexture ?? fallbackArtTexture, index: 1)
             updateEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             updateEncoder.endEncoding()
 

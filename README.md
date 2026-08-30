@@ -133,6 +133,11 @@ header in the source.
 
 ### Shader credits
 
+- **Butterfly** — adapted from an unattributed Shadertoy sketch (Shadertoy default
+  license, CC BY-NC-SA 3.0): spectrum-driven radial displacement with mirrored
+  butterfly symmetry. Changes: GLSL → Metal, the source image is the current album
+  cover, Spotify's live spectrum drives the warp (remapped to span the full range),
+  aspect-filled sampling.
 - **Calm Flow** — adapted from "Calm Flow" by **Sebastien Durand**, 2014
   (CC BY-NC-SA 3.0), building on iq's
   [bicubic filtering](https://www.shadertoy.com/view/XsSXDy), the
