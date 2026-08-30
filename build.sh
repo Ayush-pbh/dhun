@@ -18,7 +18,14 @@ fi
 if [[ -f Dhun.icns ]]; then
   cp Dhun.icns "$APP_DIR/Contents/Resources/Dhun.icns"
 fi
-codesign --force --sign - "$APP_DIR"
+# Prefer the stable local "Dhun Dev" identity (scripts/make-signing-cert.sh)
+# so macOS permissions survive rebuilds; fall back to ad-hoc.
+SIGN_IDENTITY="-"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "Dhun Dev"; then
+  SIGN_IDENTITY="Dhun Dev"
+fi
+codesign --force --sign "$SIGN_IDENTITY" "$APP_DIR"
+echo "Signed with: $SIGN_IDENTITY"
 
 echo "Built: $APP_DIR"
 echo "Run:   open \"$APP_DIR\""
