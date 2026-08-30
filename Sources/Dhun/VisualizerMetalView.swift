@@ -18,6 +18,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
     case calmflow
     case movement
     case butterfly
+    case gilled
 
     var label: String {
         switch self {
@@ -35,6 +36,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .calmflow: return "Calm Flow"
         case .movement: return "Movement"
         case .butterfly: return "Butterfly"
+        case .gilled: return "Gilled"
         }
     }
 
@@ -59,7 +61,15 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .calmflow: return .fullscreen("calmflowFragment")
         case .movement: return .feedback("movementFragment")
         case .butterfly: return .fullscreen("butterflyFragment")
+        case .gilled: return .feedback("gilledFragment")
         }
+    }
+
+    /// Present pass that turns the offscreen accumulation into the visible
+    /// frame. Gilled's accumulator holds simulation state, not colors, so it
+    /// brings its own mapping; everything else shares the standard tone map.
+    var presentShader: String {
+        self == .gilled ? "gilledPresentFragment" : "presentFragment"
     }
 
     /// Fraction of native resolution to render at. The heavy raymarchers
@@ -79,6 +89,9 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .calmflow: return 1.0
         case .movement: return 0.75
         case .butterfly: return 1.0
+        // The reaction-diffusion feature size is fixed in simulation pixels,
+        // so a coarse grid gives chunky gills and a livelier evolution.
+        case .gilled: return 0.25
         }
     }
 }
@@ -442,7 +455,7 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
         case .feedback(let fragment):
             guard let textures = ensureAccumulation(),
                   let update = fullscreenPipeline(fragment: fragment, offscreen: true),
-                  let present = fullscreenPipeline(fragment: "presentFragment", offscreen: false) else { return }
+                  let present = fullscreenPipeline(fragment: mode.presentShader, offscreen: false) else { return }
 
             let updatePass = MTLRenderPassDescriptor()
             updatePass.colorAttachments[0].texture = textures.write

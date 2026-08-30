@@ -154,6 +154,10 @@ header in the source.
   port of a demo part by Las. Changes: GLSL → Metal, texture noise → procedural,
   cloud whites softened toward the accent tint, palette via Dhun's tint system.
   Intentionally not audio-reactive — only its colors follow the scheme.
+- **Gilled** — an original Gray-Scott reaction-diffusion simulation written
+  for Dhun (no ported code), inspired by the reaction-diffusion visualizers
+  on Shadertoy. Bass onsets splash droplets into the dish; the labyrinthine
+  "gill" stripes grow from there.
 - **MoonWalk** — adapted from "MoonWalk" by
   **[Nikos Papadopoulos (4rknova)](https://www.shadertoy.com/user/4rknova)**, 2015
   (CC BY-NC-SA 3.0). Changes: GLSL → Metal, the fixed flight speed replaced with a

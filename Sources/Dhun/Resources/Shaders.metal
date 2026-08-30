@@ -1003,6 +1003,115 @@ fragment float4 butterflyFragment(FSQVertexOut in [[stage_in]],
     return float4(color, 1.0);
 }
 
+// -------------------------------------------------------------- gilled -----
+// Original for Dhun — not a ported shader. A Gray-Scott reaction-diffusion
+// simulation (Pearson's model) living in the feedback accumulator:
+// r = chemical A, g = chemical B, one simulation step per frame. The
+// coral/fingerprint parameter regime grows the labyrinthine "gill" stripes.
+// The music feeds the petri dish rather than drawing on it: bass onsets
+// splash fresh droplets of B, a slowly wandering trickle keeps the culture
+// alive through silence, mids lean the feed rate (growth temperament),
+// highs sprinkle fine specks that either fizzle or seed new gills, and the
+// overall level winds the simulation clock.
+
+static float gilledBlob(float2 p, float2 center, float radius) {
+    return smoothstep(radius, radius * 0.35, distance(p, center));
+}
+
+fragment float4 gilledFragment(FSQVertexOut in [[stage_in]],
+                               constant VizUniforms& u [[buffer(0)]],
+                               constant float* bands [[buffer(1)]],
+                               texture2d<float> prev [[texture(0)]]) {
+    float2 p = in.position.xy;
+    float2 uv = p / u.resolution;
+    float2 texel = 1.0 / u.resolution;
+    float minRes = min(u.resolution.x, u.resolution.y);
+
+    float4 c = prev.sample(linearSampler, uv);
+
+    // Fresh dish (accumulator cleared to black): chemical A everywhere plus
+    // a few starter droplets of B so the pattern begins growing immediately.
+    if (c.r + c.g < 0.001) {
+        float b = 0.0;
+        for (int i = 0; i < 5; i++) {
+            float2 seat = 0.15 + 0.7 * hash22(float2(float(i) * 13.7 + 3.1, float(i) * 7.9 + 11.4));
+            b = max(b, gilledBlob(p, seat * u.resolution, minRes * 0.02));
+        }
+        return float4(1.0, b, 0.0, 1.0);
+    }
+
+    // 3x3 Laplacian of both chemicals at once.
+    float2 lap = -c.rg;
+    lap += 0.20 * prev.sample(linearSampler, uv + float2( texel.x, 0.0)).rg;
+    lap += 0.20 * prev.sample(linearSampler, uv + float2(-texel.x, 0.0)).rg;
+    lap += 0.20 * prev.sample(linearSampler, uv + float2(0.0,  texel.y)).rg;
+    lap += 0.20 * prev.sample(linearSampler, uv + float2(0.0, -texel.y)).rg;
+    lap += 0.05 * prev.sample(linearSampler, uv + texel).rg;
+    lap += 0.05 * prev.sample(linearSampler, uv - texel).rg;
+    lap += 0.05 * prev.sample(linearSampler, uv + float2( texel.x, -texel.y)).rg;
+    lap += 0.05 * prev.sample(linearSampler, uv + float2(-texel.x,  texel.y)).rg;
+
+    float feed = 0.0545 + (u.mid - 0.3) * 0.008;
+    float kill = 0.0620 + u.high * 0.0012;
+    float dt = 0.9 + 0.5 * u.level;
+
+    float A = c.r;
+    float B = c.g;
+    float reaction = A * B * B;
+    A += (1.00 * lap.x - reaction + feed * (1.0 - A)) * dt;
+    B += (0.50 * lap.y + reaction - (kill + feed) * B) * dt;
+
+    // Bass onsets splash droplets into the dish — positions keyed to the
+    // onset's timestamp so one hit lands one fixed splash pattern.
+    if (u.beatAge < 0.10) {
+        float stamp = floor((u.time - u.beatAge) * 10.0);
+        int drops = 2 + int(u.beatStrength * 3.0);
+        for (int i = 0; i < drops; i++) {
+            float2 seat = 0.1 + 0.8 * hash22(float2(stamp * 1.618 + float(i) * 13.7,
+                                                    stamp * 2.113 + float(i) * 7.3));
+            B = max(B, gilledBlob(p, seat * u.resolution, minRes * (0.008 + 0.012 * u.beatStrength)));
+        }
+    }
+
+    // A wandering trickle keeps the culture alive through silence.
+    float2 wander = u.resolution * (0.5 + 0.36 * float2(sin(u.time * 0.13 + sin(u.time * 0.052) * 2.0),
+                                                        cos(u.time * 0.094)));
+    B = max(B, gilledBlob(p, wander, minRes * 0.006) * 0.85);
+
+    // High-frequency sparkle: tiny specks, mostly below the critical size,
+    // so they flicker and die — but the odd one seeds a new gill.
+    float speck = hash21(floor(p / 3.0) + floor(u.time * 6.0) * 0.173);
+    if (speck > 1.0 - u.high * 0.002) {
+        B = max(B, 0.55);
+    }
+
+    return float4(clamp(A, 0.0, 1.0), clamp(B, 0.0, 1.0), 0.0, 1.0);
+}
+
+fragment float4 gilledPresentFragment(FSQVertexOut in [[stage_in]],
+                                      constant VizUniforms& u [[buffer(0)]],
+                                      texture2d<float> accum [[texture(0)]]) {
+    float2 uv = in.position.xy / u.resolution;
+    float2 texel = 1.0 / u.resolution;
+    float B = accum.sample(linearSampler, uv).g;
+
+    // Stripes from the B concentration, with a soft relief light from its
+    // gradient so the gills read as ridges rather than flat ink.
+    float stripes = smoothstep(0.16, 0.34, B);
+    float bX = accum.sample(linearSampler, uv + float2(texel.x, 0.0)).g;
+    float bY = accum.sample(linearSampler, uv + float2(0.0, texel.y)).g;
+    float light = clamp(0.5 + 9.0 * (bX - B) - 6.0 * (bY - B), 0.15, 1.15);
+
+    float3 background = u.colorA.rgb * 0.10;
+    float3 ridge = mix(u.colorA.rgb, u.colorB.rgb, smoothstep(0.20, 0.55, B));
+    float3 color = mix(background, ridge * light, stripes);
+    color *= 0.85 + 0.35 * u.level;
+
+    float2 v = uv - 0.5;
+    color *= 1.0 - dot(v, v) * 0.55;
+    return float4(color, 1.0);
+}
+
 // ------------------------------------------------------ utility passes -----
 
 fragment float4 fadeFragment(FSQVertexOut in [[stage_in]],
