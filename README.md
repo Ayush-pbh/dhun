@@ -72,8 +72,11 @@ hideable Dock icon, launch at login. Everything is a toggle in **Settings (⌘,)
 
 1. **[Download Dhun-1.1.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.1.dmg)**
 2. Open it and drag **Dhun** into **Applications**.
-3. First launch: **right-click → Open** (Dhun is not notarized yet, so plain
-   double-click will be blocked by Gatekeeper the first time).
+3. First launch: Dhun is not notarized yet, so macOS shows *"Dhun" Not Opened*.
+   Click **Done** (not "Move to Trash"), then go to **System Settings →
+   Privacy & Security**, scroll to the bottom, and click **Open Anyway**.
+   One time only. Terminal folks can skip the dialog entirely with
+   `xattr -d com.apple.quarantine /Applications/Dhun.app`.
 4. Approve the **Automation** prompt — that's how Dhun reads the current track from
    Spotify. (Changed your mind later? System Settings → Privacy & Security →
    Automation → Dhun → Spotify.)
