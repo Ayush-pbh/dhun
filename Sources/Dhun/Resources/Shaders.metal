@@ -944,64 +944,55 @@ fragment float4 dreamFragment(FSQVertexOut in [[stage_in]],
     return float4(clamp(color, 0.0, 1.0), 1.0);
 }
 
-// ------------------------------------------------------------- ambience ----
-// Adapted for Dhun from a fork of "Audio Eclipse" by airtight
-//   https://www.shadertoy.com/view/MdsXWM
-// Shadertoy default license (CC BY-NC-SA 3.0); the fork declared no custom
-// license of its own.
-// Changes for Dhun: GLSL -> MSL; Shadertoy's audio texture replaced with
-// Dhun's live Spotify spectrum bands (buffer 1); the rainbow HSV dot colors
-// replaced with a circular ramp through the app's tint system — pick
-// "Album colors" to light the ring from the current cover; a soft floor
-// keeps the ring faintly lit in silence.
+// ------------------------------------------------------------- movement ----
+// Original Dhun scene, a sibling of Dream: the same slow feedback current,
+// but the source material is the music itself instead of the album art.
+// Every frame the live spectrum paints a breathing ring of tinted light
+// (bass at one side, treble wrapping around, loud bands bulging outward)
+// and the flow smears it into drifting paint. Mids stir the current, bass
+// adds swirl, level controls how much fresh color pours in.
 
-fragment float4 ambienceFragment(FSQVertexOut in [[stage_in]],
+fragment float4 movementFragment(FSQVertexOut in [[stage_in]],
                                  constant VizUniforms& u [[buffer(0)]],
-                                 constant float* bands [[buffer(1)]]) {
-    const float dots = 40.0;      // number of lights
-    const float radius = 0.25;    // radius of the light ring
-    const float brightness = 0.02;
+                                 constant float* bands [[buffer(1)]],
+                                 texture2d<float> prev [[texture(0)]]) {
+    float2 uv = in.position.xy / u.resolution;
+    float2 p = (in.position.xy - 0.5 * u.resolution) / u.resolution.y;
+    float t = u.time;
     const float pi = 3.14159265359;
 
-    float2 p = (in.position.xy - 0.5 * u.resolution) / min(u.resolution.x, u.resolution.y);
-    float t = u.time;
+    // Dream's current, stirred by the music.
+    float2 flow = curl2(p * 2.6 + float2(0.0, t * 0.05)) * (0.0012 + 0.0035 * u.mid);
+    float2 centered = uv - 0.5;
+    float swirl = 0.0005 + 0.0035 * u.bass;
+    float2 rotated = float2(centered.x * cos(swirl) - centered.y * sin(swirl),
+                            centered.x * sin(swirl) + centered.y * cos(swirl));
+    float3 prevCol = prev.sample(linearSampler, 0.5 + rotated * 0.9985 + flow).rgb;
+    prevCol *= 0.982; // old paint slowly dissolves
 
-    float3 tintA = u.colorA.rgb;
-    float3 tintB = u.colorB.rgb;
-    float3 bright = mix(tintB, float3(1.0), 0.5);
+    // The spectrum paints a breathing ring: angle = frequency.
+    float angle = atan2(p.y, p.x) / (2.0 * pi) + 0.5;
+    int bandIndex = clamp(int(angle * 47.0), 0, 47);
+    float v = 0.06 + bands[bandIndex]; // small floor keeps a faint idle ring
 
-    float3 c = tintA * 0.12; // background tint
+    float ringRadius = 0.30 * (0.75 + 0.5 * v) * (1.0 + 0.06 * sin(t * 0.4));
+    float dRing = length(p) - ringRadius;
+    float source = exp(-dRing * dRing * 260.0) * v * v;
 
-    for (int i = 0; i < 40; i++) {
-        float fi = float(i);
-
-        // One frequency band per light, low frequencies at angle zero.
-        int bandIndex = clamp(int(fi / dots * 47.0), 0, 47);
-        float vol = 0.15 + 1.2 * bands[bandIndex];
-        float b = vol * brightness;
-
-        float2 o = float2(radius * cos(2.0 * pi * fi / dots),
-                          radius * sin(2.0 * pi * fi / dots));
-
-        // Circular three-stop tint gradient instead of the HSV rainbow,
-        // rotating around the ring like the original's hue cycle.
-        float seg = fract((fi + t * 10.0) / dots) * 3.0;
-        float3 dotCol;
-        if (seg < 1.0) {
-            dotCol = mix(tintA, tintB, seg);
-        } else if (seg < 2.0) {
-            dotCol = mix(tintB, bright, seg - 1.0);
-        } else {
-            dotCol = mix(bright, tintA, seg - 2.0);
-        }
-
-        c += b / max(length(p - o), 1e-4) * dotCol;
+    // Rotating three-stop tint ramp around the ring.
+    float seg = fract(angle + t * 0.015) * 3.0;
+    float3 bright = mix(u.colorB.rgb, float3(1.0), 0.5);
+    float3 srcCol;
+    if (seg < 1.0) {
+        srcCol = mix(u.colorA.rgb, u.colorB.rgb, seg);
+    } else if (seg < 2.0) {
+        srcCol = mix(u.colorB.rgb, bright, seg - 1.0);
+    } else {
+        srcCol = mix(bright, u.colorA.rgb, seg - 2.0);
     }
 
-    // Black eclipse disc overlay.
-    c *= smoothstep(0.26, 0.28, length(p));
-
-    return float4(c, 1.0);
+    float3 color = prevCol + srcCol * source * (0.10 + 0.35 * u.level);
+    return float4(clamp(color, 0.0, 8.0), 1.0);
 }
 
 // ------------------------------------------------------ utility passes -----

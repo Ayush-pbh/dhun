@@ -133,12 +133,6 @@ header in the source.
 
 ### Shader credits
 
-- **Ambience** — adapted from a fork of
-  ["Audio Eclipse" by airtight](https://www.shadertoy.com/view/MdsXWM)
-  (Shadertoy default license, CC BY-NC-SA 3.0). Changes: GLSL → Metal,
-  Shadertoy's audio texture → Dhun's live Spotify spectrum bands, HSV rainbow →
-  circular ramp through Dhun's tint system (pick "Album colors" to light the
-  ring from the current cover).
 - **Calm Flow** — adapted from "Calm Flow" by **Sebastien Durand**, 2014
   (CC BY-NC-SA 3.0), building on iq's
   [bicubic filtering](https://www.shadertoy.com/view/XsSXDy), the

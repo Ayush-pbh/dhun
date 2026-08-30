@@ -17,7 +17,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
     case cloudcanal
     case calmflow
     case dream
-    case ambience
+    case movement
 
     var label: String {
         switch self {
@@ -34,7 +34,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .cloudcanal: return "Cloud Canal"
         case .calmflow: return "Calm Flow"
         case .dream: return "Dream"
-        case .ambience: return "Ambience"
+        case .movement: return "Movement"
         }
     }
 
@@ -58,7 +58,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .cloudcanal: return .fullscreen("cloudcanalFragment")
         case .calmflow: return .fullscreen("calmflowFragment")
         case .dream: return .feedback("dreamFragment")
-        case .ambience: return .fullscreen("ambienceFragment")
+        case .movement: return .feedback("movementFragment")
         }
     }
 
@@ -84,7 +84,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .cloudcanal: return 0.5
         case .calmflow: return 1.0
         case .dream: return 0.8
-        case .ambience: return 1.0
+        case .movement: return 0.75
         }
     }
 }
@@ -456,6 +456,13 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
             guard let updateEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: updatePass) else { return }
             updateEncoder.setRenderPipelineState(update)
             updateEncoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
+            var bandsCopy = engine?.bands ?? []
+            if bandsCopy.count != AudioVisualizerEngine.bandCount {
+                bandsCopy = [Float](repeating: 0, count: AudioVisualizerEngine.bandCount)
+            }
+            bandsCopy.withUnsafeBytes { raw in
+                updateEncoder.setFragmentBytes(raw.baseAddress!, length: raw.count, index: 1)
+            }
             updateEncoder.setFragmentTexture(textures.read, index: 0)
             updateEncoder.setFragmentTexture(artworkTexture ?? fallbackArtTexture, index: 1)
             updateEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
