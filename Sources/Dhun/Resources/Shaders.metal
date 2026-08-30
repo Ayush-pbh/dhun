@@ -985,7 +985,7 @@ fragment float4 butterflyFragment(FSQVertexOut in [[stage_in]],
     // Mirrored angle -> spectrum index: the butterfly symmetry.
     float angleNorm = (atan2(-fabs(offset.x), offset.y) / (2.0 * pi)) + 1.0; // 0.5…1
     int bandIndex = clamp(int(fract(angleNorm * 2.0) * 47.0), 0, 47);
-    float vol = bands[bandIndex];
+    float vol = bands[bandIndex] * 0.3;
 
     float len = length(offset);
     float2 dir = len > 1e-5 ? offset / len : float2(0.0);
