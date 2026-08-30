@@ -909,6 +909,101 @@ fragment float4 calmflowFragment(FSQVertexOut in [[stage_in]],
     return float4(col, 1.0);
 }
 
+// ---------------------------------------------------------------- dream ----
+// Original Dhun scene. The album artwork is the source material: every frame
+// the previous image is advected through a slow curl-noise flow while a
+// faint stream of the real cover seeps back in, so the art perpetually melts
+// and reforms without ever dissolving. By design not audio-reactive; the
+// colors come entirely from the current album cover.
+
+fragment float4 dreamFragment(FSQVertexOut in [[stage_in]],
+                              constant VizUniforms& u [[buffer(0)]],
+                              texture2d<float> prev [[texture(0)]],
+                              texture2d<float> art [[texture(1)]]) {
+    float2 uv = in.position.xy / u.resolution;
+    float2 p = (in.position.xy - 0.5 * u.resolution) / u.resolution.y;
+    float t = u.time;
+
+    // Slow dream current: curl flow plus a barely-there swirl around center.
+    float2 flow = curl2(p * 2.6 + float2(0.0, t * 0.03)) * 0.0011;
+    float2 centered = uv - 0.5;
+    float swirl = 0.0004;
+    float2 rotated = float2(centered.x * cos(swirl) - centered.y * sin(swirl),
+                            centered.x * sin(swirl) + centered.y * cos(swirl));
+    float3 prevCol = prev.sample(linearSampler, 0.5 + rotated * 0.9996 + flow).rgb;
+
+    // The cover, aspect-filled, breathing and wandering very slowly.
+    float aspect = u.resolution.x / u.resolution.y;
+    float zoom = max(aspect, 1.0) * (1.10 + 0.05 * sin(t * 0.05));
+    float2 wander = 0.02 * float2(sin(t * 0.037), cos(t * 0.049));
+    float2 artUV = 0.5 + float2((uv.x - 0.5) * aspect, uv.y - 0.5) / zoom + wander;
+    float3 artCol = art.sample(linearSampler, artUV).rgb;
+
+    // Fresh artwork seeps in; the flow does the painting.
+    float3 color = mix(prevCol, artCol, 0.02);
+    return float4(clamp(color, 0.0, 1.0), 1.0);
+}
+
+// ------------------------------------------------------------- ambience ----
+// Adapted for Dhun from a fork of "Audio Eclipse" by airtight
+//   https://www.shadertoy.com/view/MdsXWM
+// Shadertoy default license (CC BY-NC-SA 3.0); the fork declared no custom
+// license of its own.
+// Changes for Dhun: GLSL -> MSL; Shadertoy's audio texture replaced with
+// Dhun's live Spotify spectrum bands (buffer 1); the rainbow HSV dot colors
+// replaced with a circular ramp through the app's tint system — pick
+// "Album colors" to light the ring from the current cover; a soft floor
+// keeps the ring faintly lit in silence.
+
+fragment float4 ambienceFragment(FSQVertexOut in [[stage_in]],
+                                 constant VizUniforms& u [[buffer(0)]],
+                                 constant float* bands [[buffer(1)]]) {
+    const float dots = 40.0;      // number of lights
+    const float radius = 0.25;    // radius of the light ring
+    const float brightness = 0.02;
+    const float pi = 3.14159265359;
+
+    float2 p = (in.position.xy - 0.5 * u.resolution) / min(u.resolution.x, u.resolution.y);
+    float t = u.time;
+
+    float3 tintA = u.colorA.rgb;
+    float3 tintB = u.colorB.rgb;
+    float3 bright = mix(tintB, float3(1.0), 0.5);
+
+    float3 c = tintA * 0.12; // background tint
+
+    for (int i = 0; i < 40; i++) {
+        float fi = float(i);
+
+        // One frequency band per light, low frequencies at angle zero.
+        int bandIndex = clamp(int(fi / dots * 47.0), 0, 47);
+        float vol = 0.15 + 1.2 * bands[bandIndex];
+        float b = vol * brightness;
+
+        float2 o = float2(radius * cos(2.0 * pi * fi / dots),
+                          radius * sin(2.0 * pi * fi / dots));
+
+        // Circular three-stop tint gradient instead of the HSV rainbow,
+        // rotating around the ring like the original's hue cycle.
+        float seg = fract((fi + t * 10.0) / dots) * 3.0;
+        float3 dotCol;
+        if (seg < 1.0) {
+            dotCol = mix(tintA, tintB, seg);
+        } else if (seg < 2.0) {
+            dotCol = mix(tintB, bright, seg - 1.0);
+        } else {
+            dotCol = mix(bright, tintA, seg - 2.0);
+        }
+
+        c += b / max(length(p - o), 1e-4) * dotCol;
+    }
+
+    // Black eclipse disc overlay.
+    c *= smoothstep(0.26, 0.28, length(p));
+
+    return float4(c, 1.0);
+}
+
 // ------------------------------------------------------ utility passes -----
 
 fragment float4 fadeFragment(FSQVertexOut in [[stage_in]],
@@ -926,4 +1021,13 @@ fragment float4 presentFragment(FSQVertexOut in [[stage_in]],
     float3 color = src.sample(linearSampler, uv).rgb;
     color = 1.0 - exp(-color * 1.5);
     return float4(color, 1.0);
+}
+
+// Plain copy without the HDR tone map — for scenes like Dream where the
+// accumulation already holds display-ready album colors.
+fragment float4 presentLinearFragment(FSQVertexOut in [[stage_in]],
+                                      constant VizUniforms& u [[buffer(0)]],
+                                      texture2d<float> src [[texture(0)]]) {
+    float2 uv = in.position.xy / u.resolution;
+    return float4(clamp(src.sample(linearSampler, uv).rgb, 0.0, 1.0), 1.0);
 }

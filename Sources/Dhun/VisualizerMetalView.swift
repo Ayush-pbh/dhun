@@ -16,6 +16,8 @@ enum VisualizerMode: String, CaseIterable, Hashable {
     case moonwalk
     case cloudcanal
     case calmflow
+    case dream
+    case ambience
 
     var label: String {
         switch self {
@@ -31,6 +33,8 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .moonwalk: return "MoonWalk"
         case .cloudcanal: return "Cloud Canal"
         case .calmflow: return "Calm Flow"
+        case .dream: return "Dream"
+        case .ambience: return "Ambience"
         }
     }
 
@@ -53,7 +57,15 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .moonwalk: return .fullscreen("moonwalkFragment")
         case .cloudcanal: return .fullscreen("cloudcanalFragment")
         case .calmflow: return .fullscreen("calmflowFragment")
+        case .dream: return .feedback("dreamFragment")
+        case .ambience: return .fullscreen("ambienceFragment")
         }
+    }
+
+    /// The feedback/particle modes end with a present pass; Dream skips the
+    /// HDR tone map so the album colors stay faithful.
+    var presentShader: String {
+        self == .dream ? "presentLinearFragment" : "presentFragment"
     }
 
     /// Fraction of native resolution to render at. The heavy raymarchers
@@ -71,6 +83,8 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .moonwalk: return 0.55
         case .cloudcanal: return 0.5
         case .calmflow: return 1.0
+        case .dream: return 0.8
+        case .ambience: return 1.0
         }
     }
 }
@@ -160,9 +174,34 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
 
     private var drawablePipelines: [String: MTLRenderPipelineState] = [:]
     private var offscreenPipelines: [String: MTLRenderPipelineState] = [:]
-    private var presentPipeline: MTLRenderPipelineState?
     private var particlePipeline: MTLRenderPipelineState?
     private var computePipeline: MTLComputePipelineState?
+
+    private var artworkTexture: MTLTexture?
+    private weak var lastArtworkImage: NSImage?
+    private lazy var textureLoader: MTKTextureLoader? = device.map { MTKTextureLoader(device: $0) }
+    private lazy var fallbackArtTexture: MTLTexture? = {
+        guard let device else { return nil }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
+        descriptor.usage = .shaderRead
+        guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
+        var pixel: [UInt8] = [26, 26, 32, 255]
+        texture.replaceRegion(MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: &pixel, bytesPerRow: 4)
+        return texture
+    }()
+
+    func setArtwork(_ image: NSImage?) {
+        guard image !== lastArtworkImage else { return }
+        lastArtworkImage = image
+        guard let image,
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let loader = textureLoader else {
+            artworkTexture = nil
+            return
+        }
+        artworkTexture = try? loader.newTexture(cgImage: cgImage, options: [.SRGB: false as NSNumber])
+    }
 
     private var accumulationA: MTLTexture?
     private var accumulationB: MTLTexture?
@@ -266,13 +305,6 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
         cache[fragment] = pipeline
         if offscreen { offscreenPipelines = cache } else { drawablePipelines = cache }
         return pipeline
-    }
-
-    private func ensurePresentPipeline() -> MTLRenderPipelineState? {
-        if presentPipeline == nil {
-            presentPipeline = fullscreenPipeline(fragment: "presentFragment", offscreen: false)
-        }
-        return presentPipeline
     }
 
     private func ensureParticlePipeline() -> MTLRenderPipelineState? {
@@ -402,13 +434,20 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
                   let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return }
             encoder.setRenderPipelineState(pipeline)
             encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
+            var bandsCopy = engine?.bands ?? []
+            if bandsCopy.count != AudioVisualizerEngine.bandCount {
+                bandsCopy = [Float](repeating: 0, count: AudioVisualizerEngine.bandCount)
+            }
+            bandsCopy.withUnsafeBytes { raw in
+                encoder.setFragmentBytes(raw.baseAddress!, length: raw.count, index: 1)
+            }
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             encoder.endEncoding()
 
         case .feedback(let fragment):
             guard let textures = ensureAccumulation(),
                   let update = fullscreenPipeline(fragment: fragment, offscreen: true),
-                  let present = ensurePresentPipeline() else { return }
+                  let present = fullscreenPipeline(fragment: mode.presentShader, offscreen: false) else { return }
 
             let updatePass = MTLRenderPassDescriptor()
             updatePass.colorAttachments[0].texture = textures.write
@@ -418,6 +457,7 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
             updateEncoder.setRenderPipelineState(update)
             updateEncoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
             updateEncoder.setFragmentTexture(textures.read, index: 0)
+            updateEncoder.setFragmentTexture(artworkTexture ?? fallbackArtTexture, index: 1)
             updateEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             updateEncoder.endEncoding()
 
@@ -437,7 +477,7 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
                   let compute = ensureComputePipeline(),
                   let fade = fullscreenPipeline(fragment: "fadeFragment", offscreen: true),
                   let points = ensureParticlePipeline(),
-                  let present = ensurePresentPipeline(),
+                  let present = fullscreenPipeline(fragment: "presentFragment", offscreen: false),
                   let particleBuffer else { return }
 
             guard let computeEncoder = commandBuffer.makeComputeCommandEncoder() else { return }
@@ -497,6 +537,7 @@ struct MetalVisualization: NSViewRepresentable {
     let colorA: SIMD4<Float>
     let colorB: SIMD4<Float>
     var stats: VisualizerStats? = nil
+    var artwork: NSImage? = nil
 
     func makeNSView(context: Context) -> VisualizerMetalView {
         let view = VisualizerMetalView(frame: .zero, device: MTLCreateSystemDefaultDevice())
@@ -505,6 +546,7 @@ struct MetalVisualization: NSViewRepresentable {
         view.mode = mode
         view.colorA = colorA
         view.colorB = colorB
+        view.setArtwork(artwork)
         return view
     }
 
@@ -513,5 +555,6 @@ struct MetalVisualization: NSViewRepresentable {
         nsView.mode = mode
         nsView.colorA = colorA
         nsView.colorB = colorB
+        nsView.setArtwork(artwork)
     }
 }

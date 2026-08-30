@@ -135,7 +135,8 @@ struct AmbientView: View {
                     mode: settings.visualizerMode,
                     colorA: tints.body,
                     colorB: tints.accent,
-                    stats: stats
+                    stats: stats,
+                    artwork: model.artwork
                 )
                 .allowsHitTesting(false)
             } else if let artwork = model.artwork {

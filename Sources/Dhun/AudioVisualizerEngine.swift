@@ -30,6 +30,9 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
     @Published private(set) var signals = AudioSignals()
     /// Raw downsampled waveform of the latest FFT window — debug overlay only.
     @Published private(set) var waveform = [Float](repeating: 0, count: AudioVisualizerEngine.waveformCount)
+    /// Smoothed log-spaced spectrum bands for shaders that want per-frequency
+    /// detail (e.g. the Ambience light ring). Fast attack, slow decay.
+    @Published private(set) var bands = [Float](repeating: 0, count: AudioVisualizerEngine.bandCount)
 
     /// Fired once when capture can't start — almost always the Screen &
     /// System Audio Recording permission.
@@ -49,6 +52,7 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
     private var hannWindow: [Float]
     private var ringBuffer = [Float]()
     private var smoothedSignals = AudioSignals()
+    private var smoothedBands = [Float](repeating: 0, count: AudioVisualizerEngine.bandCount)
     private var slowBassAverage: Float = 0
 
     override init() {
@@ -79,11 +83,13 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
         sampleQueue.async {
             self.ringBuffer.removeAll()
             self.smoothedSignals = AudioSignals()
+            self.smoothedBands = [Float](repeating: 0, count: Self.bandCount)
             self.slowBassAverage = 0
         }
         DispatchQueue.main.async {
             self.signals = AudioSignals()
             self.waveform = [Float](repeating: 0, count: Self.waveformCount)
+            self.bands = [Float](repeating: 0, count: Self.bandCount)
         }
     }
 
@@ -261,6 +267,14 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
         smoothedSignals.high = smooth(smoothedSignals.high, bandAverage(34..<Self.bandCount), attack: 0.70, decay: 0.72)
         smoothedSignals.level = smooth(smoothedSignals.level, bandAverage(0..<Self.bandCount), attack: 0.35, decay: 0.95)
 
+        for i in 0..<Self.bandCount {
+            let target = newBands[i]
+            let current = smoothedBands[i]
+            smoothedBands[i] = target > current
+                ? current + (target - current) * 0.55
+                : current * 0.86
+        }
+
         let step = max(1, samples.count / Self.waveformCount)
         var wave = [Float](repeating: 0, count: Self.waveformCount)
         for i in 0..<Self.waveformCount {
@@ -268,9 +282,11 @@ final class AudioVisualizerEngine: NSObject, ObservableObject, SCStreamDelegate,
         }
 
         let signalsCopy = smoothedSignals
+        let bandsCopy = smoothedBands
         DispatchQueue.main.async {
             self.signals = signalsCopy
             self.waveform = wave
+            self.bands = bandsCopy
         }
     }
 
