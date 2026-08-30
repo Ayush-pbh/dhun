@@ -81,6 +81,17 @@ downloads with macOS's quarantine flag, which triggers the "Apple could not
 verify…" dialog for apps that aren't notarized; `curl` doesn't, so this route
 skips the dialog entirely.)
 
+**Homebrew** — easy updates via `brew upgrade`:
+
+```sh
+brew install --cask ayush-pbh/tap/dhun
+xattr -d com.apple.quarantine /Applications/Dhun.app
+```
+
+(The second command clears the Gatekeeper flag — Dhun isn't notarized yet, and
+Homebrew 6 removed `--no-quarantine`. Skip it if you'd rather click through
+System Settings → Privacy & Security → Open Anyway once.)
+
 **Or the classic way:**
 
 1. **[Download Dhun-1.1.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.1.dmg)**
