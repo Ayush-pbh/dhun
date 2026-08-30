@@ -15,6 +15,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
     case explosion
     case moonwalk
     case cloudcanal
+    case calmflow
 
     var label: String {
         switch self {
@@ -29,6 +30,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .explosion: return "Volumetric Explosion"
         case .moonwalk: return "MoonWalk"
         case .cloudcanal: return "Cloud Canal"
+        case .calmflow: return "Calm Flow"
         }
     }
 
@@ -50,6 +52,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .explosion: return .fullscreen("explosionFragment")
         case .moonwalk: return .fullscreen("moonwalkFragment")
         case .cloudcanal: return .fullscreen("cloudcanalFragment")
+        case .calmflow: return .fullscreen("calmflowFragment")
         }
     }
 
@@ -67,6 +70,7 @@ enum VisualizerMode: String, CaseIterable, Hashable {
         case .explosion: return 0.5
         case .moonwalk: return 0.55
         case .cloudcanal: return 0.5
+        case .calmflow: return 1.0
         }
     }
 }

@@ -743,10 +743,11 @@ fragment float4 moonwalkFragment(FSQVertexOut in [[stage_in]],
 // Original license: CC BY-NC-SA 3.0 Unported, as declared in the shader.
 // Changes for Dhun: GLSL -> MSL; iChannel texture noise replaced with
 // procedural value noise (and the duplicated same-coordinate lookup folded
-// into one call); the fixed forward speed replaced with the music-integrated
-// travel distance; cloud density follows the mids, exposure follows the
-// level; palette routed through the app's tint system (Electric Blue is
-// closest to the original).
+// into one call); mouse density control removed; cloud accumulation tinted
+// toward the accent instead of pure white; palette routed through the app's
+// tint system (Electric Blue is closest to the original). By design this
+// scene is NOT audio-reactive — it keeps its own time-based glide; only the
+// colors follow the selected scheme.
 
 static float ccCosPath(float3 p, float3 dec) { return dec.x * cos(p.z * dec.y + dec.z); }
 static float ccSinPath(float3 p, float3 dec) { return dec.x * sin(p.z * dec.y + dec.z); }
@@ -812,8 +813,7 @@ fragment float4 cloudcanalFragment(FSQVertexOut in [[stage_in]],
     float3 ro = float3(0.0);
     ro.y = sin(t * 0.2) * 15.0 + 15.0;
     ro.x = sin(t * 0.5) * 5.0;
-    // Music-driven forward motion instead of t * 5.
-    ro.z = u.travel * 0.8;
+    ro.z = t * 5.0;
 
     float3 rd = ccCam(uv, p, float3(0.0, 1.0, 0.0), p + float3(0.0, 0.0, 1.0));
 
@@ -823,15 +823,16 @@ fragment float4 cloudcanalFragment(FSQVertexOut in [[stage_in]],
     float d = 1.0;
     float dd = 0.0;
     float w = 0.0;
-    // Density factor (mouse-tuned in the original); mids thicken the clouds.
-    float densityVar = 0.03 + 0.05 * u.mid;
+    const float densityVar = 0.03;
+    // Clouds glow softly toward the accent tint instead of blowing out white.
+    float3 cloudTint = mix(float3(0.82), tintB, 0.25);
 
     for (int i = 0; i < 200; i++) {
         if (s < 0.01 || d > 500.0 || td > 0.95) break;
         s = ccMap(p, t) * (s > 0.001 ? densityVar : 0.2);
         if (s < h) {
             w = (1.0 - td) * (h - s) * float(i) / 200.0;
-            f += w;
+            f.rgb += w * cloudTint;
             td += w;
         }
         dd += 0.012;
@@ -847,9 +848,65 @@ fragment float4 cloudcanalFragment(FSQVertexOut in [[stage_in]],
     // Vignette from iq's "Shader Mike".
     float2 q = g / si;
     f.rgb *= 0.5 + 0.5 * pow(16.0 * q.x * q.y * (1.0 - q.x) * (1.0 - q.y), 0.25);
-    f.rgb *= 0.85 + 0.35 * u.level;
 
     return float4(f.rgb, 1.0);
+}
+
+// ------------------------------------------------------------ calm flow ----
+// Adapted for Dhun from "Calm Flow" by Sebastien Durand, 2014
+// Original license: CC BY-NC-SA 3.0 Unported, as declared in the shader.
+// Built on: iq's bicubic filtering (https://www.shadertoy.com/view/XsSXDy),
+// the heatmap palette study (https://www.shadertoy.com/view/4dsSzr), and
+// iq's distance-to-isoline article (https://iquilezles.org/articles/distance).
+// Changes for Dhun: GLSL -> MSL; the bicubic-filtered noise texture replaced
+// with procedural value noise; the heatmap palette replaced with a ramp
+// through the app's tint system; mouse control removed. By design this scene
+// is NOT audio-reactive — it drifts on its own slow clock; only the colors
+// follow the selected scheme.
+
+static float cfMod(float x, float y) {
+    return x - y * floor(x / y);
+}
+
+static float cfEval(float2 uv, float t) {
+    float slow = t * 0.005;
+    float2 offset = float2(cos(slow), sin(slow)) * 256.0;
+    float2 p = offset + uv * (1.0 + 0.5 * cos(t * 0.05)) * 0.04 * 256.0;
+    return 5.0 * cos(t * 0.05) + 10.0 * vnoise(p);
+}
+
+static float cfIsoline(float val, float lg, float ref, float pas, float thickness) {
+    float v = fabs(cfMod(val - ref + pas * 0.5, pas) - pas * 0.5) / max(lg, 1e-5) - 0.1 * thickness;
+    return smoothstep(0.2, 0.8, v);
+}
+
+static float3 cfPalette(float v, float3 tintA, float3 tintB) {
+    float x = fract((v - 11.0) * 0.1);
+    float3 c = mix(tintA * 0.12, tintA, smoothstep(0.0, 0.45, x));
+    c = mix(c, tintB, smoothstep(0.35, 0.75, x));
+    c = mix(c, mix(tintB, float3(1.0), 0.55), smoothstep(0.78, 1.0, x));
+    return clamp(c, 0.0, 1.0);
+}
+
+fragment float4 calmflowFragment(FSQVertexOut in [[stage_in]],
+                                 constant VizUniforms& u [[buffer(0)]]) {
+    float t = u.time;
+    float2 g = float2(in.position.x, u.resolution.y - in.position.y);
+    float2 uv = g / u.resolution.x;
+
+    float val = cfEval(uv, t);
+    float lg = 2.0 * length(float2(dfdx(val), dfdy(val)));
+
+    const float ref = 1.0;
+    float k1 = cfIsoline(val, lg, ref, 0.4, 1.0);
+    float k2 = cfIsoline(val, lg, ref, 2.0, 10.0);
+
+    float3 col = cfPalette(val, u.colorA.rgb, u.colorB.rgb);
+    col *= k2;
+    col *= 0.3 + k1 * 0.7;
+    col *= pow(30.0 * uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y), 0.2);
+
+    return float4(col, 1.0);
 }
 
 // ------------------------------------------------------ utility passes -----

@@ -133,14 +133,22 @@ header in the source.
 
 ### Shader credits
 
+- **Calm Flow** — adapted from "Calm Flow" by **Sebastien Durand**, 2014
+  (CC BY-NC-SA 3.0), building on iq's
+  [bicubic filtering](https://www.shadertoy.com/view/XsSXDy), the
+  [heatmap palette study](https://www.shadertoy.com/view/4dsSzr), and iq's
+  [distance-to-isoline article](https://iquilezles.org/articles/distance).
+  Changes: GLSL → Metal, bicubic noise texture → procedural noise, heatmap
+  palette → Dhun's tint ramp, mouse control removed. Intentionally not
+  audio-reactive — only its colors follow the scheme.
 - **Cloud Canal** — adapted from "Cloud Canal" by
   **[Stephane Cuillerdier (Aiekick)](https://www.shadertoy.com/user/aiekick)**, 2015
   (CC BY-NC-SA 3.0), a variation of his
   ["Another Cloudy Tunnel"](https://www.shadertoy.com/view/4lSXRK); cloud technique
   from duke's ["Cloudy spikeball"](https://www.shadertoy.com/view/MljXDw), itself a
   port of a demo part by Las. Changes: GLSL → Metal, texture noise → procedural,
-  music-driven forward speed, mids thicken the clouds, level lifts exposure,
-  palette via Dhun's tint system.
+  cloud whites softened toward the accent tint, palette via Dhun's tint system.
+  Intentionally not audio-reactive — only its colors follow the scheme.
 - **MoonWalk** — adapted from "MoonWalk" by
   **[Nikos Papadopoulos (4rknova)](https://www.shadertoy.com/user/4rknova)**, 2015
   (CC BY-NC-SA 3.0). Changes: GLSL → Metal, the fixed flight speed replaced with a
