@@ -15,7 +15,7 @@ struct VizUniforms {
     float level;
     float beatAge;      // seconds since the last bass onset
     float beatStrength; // how hard it hit, 0…1
-    float pad;
+    float beatPulse;    // CPU-smoothed blast envelope: rises fast, eases back
     float2 pad2;
     float4 colorA;
     float4 colorB;
@@ -539,10 +539,12 @@ fragment float4 explosionFragment(FSQVertexOut in [[stage_in]],
     // Explosion lifecycle, driven by the last bass onset instead of a loop.
     float age = max(u.beatAge, 0.0);
     float strength = clamp(u.beatStrength, 0.0, 1.0);
-    float grow = 1.0 - exp(-age * 1.8);
     float energy = strength * exp(-age * 0.45);
     float dissolve = max(2.0 * (1.0 - exp(-age * 0.5)) - 0.3 * u.mid, 0.0);
-    float radius = 3.1 + 2.6 * grow * (0.5 + 0.5 * strength);
+    // Size follows the CPU-smoothed pulse: it expands quickly on a hit and
+    // eases back down gradually — the radius travels, it never jumps.
+    float pulse = clamp(u.beatPulse, 0.0, 1.5);
+    float radius = 3.1 + 2.6 * pulse;
     float brightness = 0.22 + 0.50 * u.level + 2.1 * energy;
 
     float3 rd = normalize(float3((fragCoord - 0.5 * u.resolution) / u.resolution.y, 1.0));

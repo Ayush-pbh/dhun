@@ -133,6 +133,8 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
 
     private var frameCount = 0
     private var lastFPSStamp = CACurrentMediaTime()
+    private var beatPulse: Float = 0
+    private var lastPulseStamp = CACurrentMediaTime()
 
     var mode: VisualizerMode = .plasma {
         didSet {
@@ -167,7 +169,7 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
         var level: Float
         var beatAge: Float
         var beatStrength: Float
-        var pad: Float = 0
+        var beatPulse: Float
         var pad2: SIMD2<Float> = .zero
         var colorA: SIMD4<Float>
         var colorB: SIMD4<Float>
@@ -350,6 +352,17 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
     private func makeUniforms() -> Uniforms {
         let signals = engine?.signals ?? AudioSignals()
         let now = CACurrentMediaTime()
+
+        // Asymmetric blast envelope: chase a decaying post-onset target with a
+        // fast rise and a slow, eased fall — framerate-independent, and
+        // continuous even when onsets arrive mid-decay.
+        let age = min(max(now - signals.onsetTime, 0), 999)
+        let target = signals.onsetStrength * Float(exp(-age * 0.30))
+        let dt = Float(min(max(now - lastPulseStamp, 0), 0.1))
+        lastPulseStamp = now
+        let rate: Float = target > beatPulse ? 10.0 : 1.1
+        beatPulse += (target - beatPulse) * min(dt * rate, 1)
+
         return Uniforms(
             resolution: SIMD2(Float(drawableSize.width), Float(drawableSize.height)),
             time: Float(now - startTime),
@@ -357,8 +370,9 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
             mid: signals.mid,
             high: signals.high,
             level: signals.level,
-            beatAge: Float(min(max(now - signals.onsetTime, 0), 999)),
+            beatAge: Float(age),
             beatStrength: signals.onsetStrength,
+            beatPulse: beatPulse,
             colorA: colorA,
             colorB: colorB
         )
