@@ -187,7 +187,7 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
         descriptor.usage = .shaderRead
         guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
         var pixel: [UInt8] = [26, 26, 32, 255]
-        texture.replaceRegion(MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: &pixel, bytesPerRow: 4)
+        texture.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: &pixel, bytesPerRow: 4)
         return texture
     }()
 
