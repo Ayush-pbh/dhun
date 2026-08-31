@@ -17,7 +17,7 @@ No Electron. No JavaScript. No web views.
 
 <img src="docs/banner.png" alt="Dhun banner" width="100%">
 
-**[⬇ Download Dhun.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.1.dmg)**
+**[⬇ Download Dhun.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.1.1.dmg)**
 
 </div>
 
@@ -94,7 +94,7 @@ System Settings → Privacy & Security → Open Anyway once.)
 
 **Or the classic way:**
 
-1. **[Download Dhun-1.1.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.1.dmg)**
+1. **[Download Dhun-1.1.1.dmg](https://github.com/Ayush-pbh/dhun/releases/latest/download/Dhun-1.1.1.dmg)**
 2. Open it and drag **Dhun** into **Applications**.
 3. First launch: Dhun is not notarized yet, so macOS shows *"Dhun" Not Opened*.
    Click **Done** (not "Move to Trash"), then go to **System Settings →

@@ -221,9 +221,22 @@ final class VisualizerMetalView: MTKView, MTKViewDelegate {
     }
 
     private func loadLibrary() {
-        guard let device,
-              let url = Bundle.module.url(forResource: "Shaders", withExtension: "metal"),
-              let source = try? String(contentsOf: url, encoding: .utf8) else {
+        guard let device else { return }
+        // Never touch SwiftPM's generated Bundle.module here: for executable
+        // targets it only checks the .app ROOT (not Contents/Resources) and
+        // then an absolute path into the build machine's .build directory —
+        // so it works in development and calls fatalError on every other
+        // Mac. Resolve the bundled shader source by hand instead.
+        let candidates = [
+            // Real app bundle: Contents/Resources/Dhun_Dhun.bundle/…
+            Bundle.main.url(forResource: "Shaders", withExtension: "metal", subdirectory: "Dhun_Dhun.bundle"),
+            // Bare executable (swift run): the bundle sits next to the binary.
+            Bundle.main.bundleURL.appendingPathComponent("Dhun_Dhun.bundle/Shaders.metal"),
+        ]
+        guard let source = candidates
+            .compactMap({ $0 })
+            .compactMap({ try? String(contentsOf: $0, encoding: .utf8) })
+            .first else {
             NSLog("Visualizer shaders missing from bundle")
             return
         }
